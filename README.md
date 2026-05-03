@@ -1,17 +1,16 @@
-# blink-usb-bridge
+# BlinkPi
 
 **Relay Blink Sync Module 2 motion clips off the device, automatically, with no Blink subscription required.**
 
-A Raspberry Pi (Zero 2 W is plenty) plugs into your Sync Module 2's USB port and pretends to be a USB hard drive. The SM2 happily writes motion clips to that "drive." Every 30 seconds, the Pi reads the same backing file from inside, finds new clips, and pushes them anywhere you want — an SMB share on your Windows PC or NAS, an rclone remote (Google Drive, Dropbox, S3, Backblaze, ...), or both.
+A Raspberry Pi (Zero 2 W recommended) plugs into your Sync Module 2's USB port and pretends to be a USB flash drive (gadget mode). The SM2 happily writes motion clips to that "drive." Every 30 seconds, the Pi reads the same backing file from inside, finds new clips, and pushes them anywhere you want — an SMB share on your Windows PC or NAS, an rclone remote (Google Drive, Dropbox, S3, Backblaze, ...), or both. There's also an option to just keep the files on the BlinkPi and have it expose the clips on a light weight webserver accessible on your local network.  
 
 You get full local clip access, all your motion footage at any retention you want, and you keep using the Blink app and integrations as normal.
 
 ## What this gives you
 
 - **Local copies of every motion clip**, automatically, within ~30 seconds of recording
-- **No Blink subscription needed** for clip access (you still need one for cloud backup, but you don't need cloud backup if you have this)
-- **Two destinations out of the box**: SMB share (for archiving) and rclone (for cloud backup with retention)
-- **Pluggable destinations** — adding S3 or MQTT or whatever is a 50-line file
+- **No Blink subscription needed** for cloud backup
+- **Pluggable destinations** — I'm pushing clips to a local SMB server for long term retention and keeping one weeks worth of clips on google drive. Other services like Amazon S3 or box should work fine too but I havent tested those.
 - **Optional local web UI** at `http://blinkpi.local:8080` — browse and play clips on the Pi itself, no external service required
 - **Nightly cleanup** with configurable retention (delete everything, or keep N days as a buffer)
 - **Clean filenames** — `2026-04-27_21-38-40_garage.mp4` — sortable, human-readable
@@ -19,13 +18,12 @@ You get full local clip access, all your motion footage at any retention you wan
 ## What this is not
 
 - Not real-time. There's a 30-second polling delay (configurable).
-- Not a replacement for the Blink integration in Home Assistant. Use both — Blink for motion sensors and live view, this for the actual clip files.
 - Not magic. The SM2's clip recording is still subject to all the SM2's quirks — battery, camera connectivity, Wi-Fi, etc.
 
 ## How it works
 
 ```
-┌─────────────────┐  USB-OTG cable  ┌──────────────┐
+┌─────────────────┐  USB cable      ┌──────────────┐
 │ Sync Module 2   │◀────────────────│ Raspberry Pi │
 │ (sees a USB     │                 │ (presents    │
 │  flash drive)   │                 │  itself as   │
@@ -56,10 +54,10 @@ The Pi also loop-mounts that same backing image read-only and walks the filesyst
 
 You'll need:
 
-- **Raspberry Pi Zero 2 W**, Pi 4, or any Pi with USB-OTG support. Pi Zero 2 W is recommended — small, cheap, low-power.
-- **A USB-OTG cable** (USB-A male on the SM2 side, USB-A male on the Pi's USB-OTG port — yes, both ends are male; the cable converts the Pi's micro-USB-OTG port to USB-A male)
-- **Raspberry Pi OS Lite** (Bookworm or later)
-- **A Blink Sync Module 2**
+- **Raspberry Pi**, Pi Zero 2 W is recommended — small, cheap, supports gadget mode, low-power.
+- **A USB cable** USB A to micro USB cable, make sure you use a data cable (not a charging only). I snipped the power lines (red and black) on mine so that it will do data only. If you are powering both the Raspberry Pi and the SM2 from the same power supply that's probably not strictly necesarry though.
+- **SD Card** 32 GB is plenty, but get a high quality one as it will see lot's of writes over it's life. Flash it with the latest version of Raspberry Pi OS Lite using Raspberry Pi Imager
+- **A Blink Sync Module 2** The newer ones with sd cards instead of a USB port wont work.
 
 See [docs/INSTALL.md](docs/INSTALL.md) for the full step-by-step guide. The short version:
 
@@ -106,6 +104,5 @@ MIT. See [LICENSE](LICENSE).
 
 ## Caveats and credits
 
-This project came from one person's weekend curiosity about whether the SM2's USB port could be tricked into letting them read their own footage. None of the SM2's USB filesystem is documented by Blink — the format details in [docs/SM2_FILESYSTEM.md](docs/SM2_FILESYSTEM.md) were figured out empirically. If a future SM2 firmware update changes the layout, this project will need an update too.
-
-Use at your own risk. This isn't endorsed by Blink or Amazon. The SM2 doesn't seem to mind being USB-spoofed (it just sees a USB drive), but if Blink ever decides they care, your mileage may vary.
+Most of this code was written by AI and hasn't been fully vetted by me. Use at your own risk. 
+This isn't endorsed by Blink or Amazon. The SM2 doesn't seem to mind being USB-spoofed (it just sees a USB drive), but if Blink ever decides they care, your mileage may vary.

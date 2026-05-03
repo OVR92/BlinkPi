@@ -118,7 +118,7 @@ Plug the Pi's USB port into the SM2's USB port. The SM2 should light up and the 
 Open the Blink app on your phone:
 - Go to **Sync Module 2 → Local Storage**
 - You should see a "Connect Local Storage" prompt for a new USB drive
-- Tap **Format** to let the SM2 format the drive
+- Open the Blink app and tap **Format** to let the SM2 format the drive
 - After formatting, the SM2 starts using it for motion clips
 
 ## 7. Trigger a clip

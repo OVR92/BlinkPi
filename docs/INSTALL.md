@@ -67,7 +67,7 @@ rclone delete myremote:test.txt
 
 ```bash
 cd ~
-git clone https://github.com/CHANGEME/blink-usb-bridge
+git clone https://github.com/OVR92/BlinkPi
 cd blink-usb-bridge
 cp config.example.yaml config.yaml
 ```

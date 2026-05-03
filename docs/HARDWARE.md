@@ -9,10 +9,6 @@ A **Raspberry Pi Zero 2 W** is the recommended hardware. It's:
 - Has USB-OTG support out of the box
 - Plenty fast for the polling and rsync workload
 
-A regular **Pi 4** or **Pi 5** also works fine. Pi 3 is borderline — it has USB-OTG but the host port wiring is shared, which complicates things.
-
-A first-gen **Pi Zero W** technically works but is noticeably slower for the periodic work.
-
 ## OS
 
 **Raspberry Pi OS Lite (Bookworm or later)** is what the install script targets. The 64-bit Lite image is recommended.

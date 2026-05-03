@@ -46,8 +46,8 @@ bub-prune = "blink_usb_bridge.prune:main"
 bub-web = "blink_usb_bridge.web:main"
 
 [project.urls]
-Homepage = "https://github.com/CHANGEME/blink-usb-bridge"
-Issues = "https://github.com/CHANGEME/blink-usb-bridge/issues"
+Homepage = "https://github.com/OVR92/BlinkPi"
+Issues = "https://github.com/OVR92/BlinkPi/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

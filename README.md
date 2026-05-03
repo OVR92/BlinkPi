@@ -65,7 +65,7 @@ See [docs/INSTALL.md](docs/INSTALL.md) for the full step-by-step guide. The shor
 
 ```bash
 # On the Pi
-git clone https://github.com/CHANGEME/blink-usb-bridge
+git clone https://github.com/OVR92/BlinkPi
 cd blink-usb-bridge
 cp config.example.yaml config.yaml
 $EDITOR config.yaml          # set destinations, paths, timezone

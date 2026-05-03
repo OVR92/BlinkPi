@@ -35,7 +35,7 @@ On the machine that will host the share:
 ```bash
 sudo mkdir -p /etc/samba/credentials
 sudo tee /etc/samba/credentials/blink > /dev/null <<'EOF'
-username=blinkpi
+username=YOUR_SMB_ACCOUNT_USERNAME
 password=YOUR_SECRET_PASSWORD
 EOF
 sudo chmod 0600 /etc/samba/credentials/blink

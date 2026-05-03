@@ -5,8 +5,9 @@ This walks you through setting up blink-usb-bridge from scratch. Budget about 30
 ## Prerequisites
 
 - A Pi Zero 2 W (or other USB-OTG-capable Pi) running Raspberry Pi OS Lite
-- A USB-OTG cable (see [HARDWARE.md](HARDWARE.md))
+- A USB cable (see [HARDWARE.md](HARDWARE.md))
 - A Sync Module 2
+- SD Card 
 - An SMB-shared folder on your network *or* an rclone-configured remote (or both)
 - About 30 minutes
 
@@ -49,7 +50,7 @@ rclone config
 
 Walk through the prompts to set up your remote. Detailed rclone docs at https://rclone.org/docs/. **A few specifics that matter:**
 
-- For Google Drive, you almost certainly want a **Service Account** with **Manager** permission on a **Workspace Shared Drive**. Personal Drives don't allow service-account uploads (zero-quota issue), and lower permission levels don't allow permanent-delete.
+- For Google Drive, you almost certainly want a **Service Account** with **Manager** permission on a **Workspace Shared Drive**. Personal Drives don't allow service-account uploads (zero-quota issue), and lower permission levels don't allow permanent-delete for pruning old clips.
 - The `remote:` you reference in `config.yaml` should match the name you used in `rclone config`.
 - For permanent-delete (skipping trash), Google Drive needs Manager role on the Shared Drive.
 
@@ -112,7 +113,7 @@ The reboot is needed to load the dwc2 module (gadget mode).
 
 ## 6. Plug in to the SM2
 
-Plug the Pi's USB-OTG port into the SM2's USB port (using the OTG cable from [HARDWARE.md](HARDWARE.md)). The SM2 should light up and the Blink app should show a notification or prompt.
+Plug the Pi's USB port into the SM2's USB port. The SM2 should light up and the Blink app should show a notification or prompt.
 
 Open the Blink app on your phone:
 - Go to **Sync Module 2 → Local Storage**
@@ -137,12 +138,3 @@ sudo systemctl list-timers blink-*
 ```
 
 You should see `blink-wipe.timer` scheduled for the time you set (3 AM by default). Don't worry about testing the wipe right now — it'll run on its own and the next morning you can check `journalctl -u blink-wipe.service` to see what it did.
-
-## Common issues
-
-If something doesn't work, check [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The most common issues are:
-
-- **Pi doesn't appear as a USB drive to the SM2**: USB-OTG cable wrong way around, or `dwc2` overlay not loaded (check `lsmod | grep dwc2`)
-- **Sync runs but pushes 0 files**: Backing image isn't mounted, or path doesn't match `mount_point` in config
-- **SMB destination fails**: credentials file wrong format, share not actually shared, firewall blocking 445/tcp
-- **rclone destination fails**: remote not configured, service account doesn't have permissions

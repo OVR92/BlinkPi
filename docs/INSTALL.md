@@ -5,8 +5,8 @@ This walks you through setting up blink-usb-bridge from scratch. Budget about 30
 ## Prerequisites
 
 - A Pi Zero 2 W (or other USB-OTG-capable Pi) running Raspberry Pi OS Lite
-- A USB cable (see [HARDWARE.md](HARDWARE.md))
-- A Sync Module 2
+- A USB cable
+- A Blink Sync Module 2
 - SD Card 
 - An SMB-shared folder on your network *or* an rclone-configured remote (or both)
 - About 30 minutes

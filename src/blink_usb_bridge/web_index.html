@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>blink-usb-bridge</title>
+<style>
+  :root {
+    --bg: #0e0e10;
+    --bg-2: #18181b;
+    --bg-3: #232327;
+    --fg: #f5f5f7;
+    --fg-2: #a1a1aa;
+    --fg-3: #71717a;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.15);
+    --border: #2a2a2e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    overflow-x: hidden;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: rgba(14, 14, 16, 0.85);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 18px 12px;
+  }
+  .title {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .title h1 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .title .stats {
+    color: var(--fg-3);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .filters {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .chip {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    color: var(--fg-2);
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .chip:hover { color: var(--fg); border-color: var(--fg-3); }
+  .chip[aria-pressed="true"] {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  main {
+    padding: 14px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .clip {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--bg-2);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: transform 0.12s, border-color 0.12s;
+  }
+  .clip:hover { border-color: var(--fg-3); }
+  .clip:active { transform: scale(0.98); }
+  .clip video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #000;
+  }
+  .clip .play {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+    opacity: 0.85;
+  }
+  .clip .play svg {
+    width: 56px; height: 56px;
+    color: rgba(255,255,255,0.95);
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  }
+  .clip .meta {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 10px 12px;
+    background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+    color: #fff;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
+  .clip .cam {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 4px 9px;
+    border-radius: 5px;
+    text-transform: lowercase;
+  }
+
+  /* Modal player */
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.92);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal.open { display: flex; }
+  .modal video {
+    max-width: 100%;
+    max-height: 100%;
+    background: #000;
+    border-radius: 8px;
+  }
+  .modal .close {
+    position: absolute; top: 16px; right: 16px;
+    background: rgba(0,0,0,0.5);
+    border: none;
+    color: #fff;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+  }
+  .modal .info {
+    position: absolute; left: 0; right: 0; bottom: 16px;
+    text-align: center;
+    color: #fff;
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  /* Empty / loading states */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--fg-3);
+  }
+  .empty .sub { font-size: 13px; margin-top: 6px; color: var(--fg-3); }
+  .spinner {
+    display: inline-block;
+    width: 24px; height: 24px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Status bar */
+  .status {
+    margin-top: 18px;
+    padding: 10px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--fg-3);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .status .label { color: var(--fg-2); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">
+    <h1>BlinkPi</h1>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="filters" id="cam-filters" role="group" aria-label="Camera filter">
+    <button class="chip" data-cam="all" aria-pressed="true">All cameras</button>
+  </div>
+</header>
+
+<main>
+  <div id="grid" class="grid"></div>
+  <div id="empty" class="empty" style="display: none;">
+    <div class="spinner"></div>
+    <div style="margin-top: 14px;">Loading clips…</div>
+  </div>
+  <div class="status" id="status"></div>
+</main>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true">
+  <button class="close" id="modal-close" aria-label="Close">×</button>
+  <video id="modal-video" controls autoplay playsinline></video>
+  <div class="info" id="modal-info"></div>
+</div>
+
+<script>
+const state = {
+  clips: [],
+  cameraFilter: "all",
+};
+
+const $ = (sel) => document.querySelector(sel);
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yest = new Date(today.getTime() - 86400000);
+  const dStart = new Date(d); dStart.setHours(0, 0, 0, 0);
+  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (dStart.getTime() === today.getTime()) return `Today ${time}`;
+  if (dStart.getTime() === yest.getTime()) return `Yesterday ${time}`;
+  return d.toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+  });
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " KB";
+  return (bytes / 1024 / 1024).toFixed(1) + " MB";
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+async function loadClips() {
+  try {
+    const res = await fetch("/api/clips");
+    const data = await res.json();
+    state.clips = data.clips || [];
+    renderCameraChips();
+    render();
+  } catch (e) {
+    $("#empty").innerHTML = "Could not load clips.<br><div class='sub'>" + escapeHTML(e) + "</div>";
+    $("#empty").style.display = "block";
+  }
+}
+
+async function loadStatus() {
+  try {
+    const res = await fetch("/api/status");
+    const s = await res.json();
+    const sb = $("#status");
+    const mountIcon = s.mounted ? "🟢" : "🔴";
+    sb.innerHTML = `
+      <span class="label">Mount:</span> ${mountIcon} ${s.mounted ? "active" : "not mounted"} &nbsp;·&nbsp;
+      <span class="label">Clips on Pi:</span> ${s.clip_count} &nbsp;·&nbsp;
+      <span class="label">Last sync:</span> ${escapeHTML(s.last_sync || "—")}
+    `;
+  } catch (e) {
+    $("#status").textContent = "Status unavailable";
+  }
+}
+
+function renderCameraChips() {
+  const wrap = $("#cam-filters");
+  const cams = [...new Set(state.clips.map(c => c.camera))].sort();
+  if (cams.length <= 1) {
+    wrap.innerHTML = `<button class="chip" data-cam="all" aria-pressed="true">All cameras</button>`;
+  } else {
+    const chips = [{ value: "all", label: "All cameras" }, ...cams.map(c => ({ value: c, label: c }))];
+    wrap.innerHTML = chips.map(c => `
+      <button class="chip" data-cam="${escapeHTML(c.value)}"
+              aria-pressed="${c.value === state.cameraFilter ? "true" : "false"}">
+        ${escapeHTML(c.label)}
+      </button>
+    `).join("");
+  }
+  wrap.querySelectorAll(".chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      wrap.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", "false"));
+      chip.setAttribute("aria-pressed", "true");
+      state.cameraFilter = chip.dataset.cam;
+      render();
+    });
+  });
+}
+
+function render() {
+  const filtered = state.cameraFilter === "all"
+    ? state.clips
+    : state.clips.filter(c => c.camera === state.cameraFilter);
+
+  $("#stats").textContent = filtered.length === state.clips.length
+    ? `${state.clips.length} clips`
+    : `${filtered.length} of ${state.clips.length}`;
+
+  const grid = $("#grid");
+  if (filtered.length === 0) {
+    grid.innerHTML = "";
+    $("#empty").innerHTML = state.clips.length === 0
+      ? "No clips yet.<div class='sub'>Trigger motion on a camera and they'll appear here.</div>"
+      : "No clips match this filter.";
+    $("#empty").style.display = "block";
+    return;
+  }
+
+  $("#empty").style.display = "none";
+  grid.innerHTML = filtered.map((c, i) => `
+    <div class="clip" data-i="${i}">
+      <video muted preload="metadata" playsinline
+             src="/clip/${encodeURI(c.rel_path)}#t=2"></video>
+      <div class="play">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </div>
+      <div class="cam">${escapeHTML(c.camera)}</div>
+      <div class="meta">${fmtTime(c.timestamp)} · ${fmtSize(c.size_bytes)}</div>
+    </div>
+  `).join("");
+
+  grid.querySelectorAll(".clip").forEach(el => {
+    el.addEventListener("click", () => openModal(filtered[parseInt(el.dataset.i, 10)]));
+  });
+}
+
+function openModal(clip) {
+  $("#modal-video").src = "/clip/" + encodeURI(clip.rel_path);
+  $("#modal-info").textContent = `${clip.camera} · ${fmtTime(clip.timestamp)}`;
+  $("#modal").classList.add("open");
+}
+
+function closeModal() {
+  $("#modal").classList.remove("open");
+  const v = $("#modal-video");
+  v.pause();
+  v.src = "";
+}
+
+$("#modal-close").addEventListener("click", closeModal);
+$("#modal").addEventListener("click", e => { if (e.target === $("#modal")) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+// Initial load
+$("#empty").style.display = "block";
+loadClips();
+loadStatus();
+
+// Periodic refresh
+setInterval(loadClips, 30000);
+setInterval(loadStatus, 15000);
+</script>
+</body>
+</html>

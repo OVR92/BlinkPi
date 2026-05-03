@@ -12,7 +12,8 @@ You get full local clip access, all your motion footage at any retention you wan
 - **No Blink subscription needed** for clip access (you still need one for cloud backup, but you don't need cloud backup if you have this)
 - **Two destinations out of the box**: SMB share (for archiving) and rclone (for cloud backup with retention)
 - **Pluggable destinations** — adding S3 or MQTT or whatever is a 50-line file
-- **Nightly cleanup** of the Pi's storage so it doesn't fill up
+- **Optional local web UI** at `http://blinkpi.local:8080` — browse and play clips on the Pi itself, no external service required
+- **Nightly cleanup** with configurable retention (delete everything, or keep N days as a buffer)
 - **Clean filenames** — `2026-04-27_21-38-40_garage.mp4` — sortable, human-readable
 
 ## What this is not

@@ -30,6 +30,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
 dev = [
     "pytest>=7",
     "ruff>=0.1",
@@ -39,6 +43,7 @@ dev = [
 bub-sync = "blink_usb_bridge.sync:main"
 bub-wipe = "blink_usb_bridge.wipe:main"
 bub-prune = "blink_usb_bridge.prune:main"
+bub-web = "blink_usb_bridge.web:main"
 
 [project.urls]
 Homepage = "https://github.com/CHANGEME/blink-usb-bridge"
@@ -50,3 +55,6 @@ where = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.setuptools.package-data]
+blink_usb_bridge = ["web_index.html"]

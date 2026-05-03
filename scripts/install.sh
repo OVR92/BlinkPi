@@ -11,7 +11,9 @@
 #   6. Creates the backing image if it doesn't exist yet
 #   7. Adds an /etc/fstab entry for the SMB destination if enabled
 #   8. Adds a sudoers entry so the unprivileged user can mount the image
-#   9. Enables and starts the timers
+#   9. (optional) Installs avahi-daemon for .local mDNS discovery
+#  10. (optional) Installs the web UI service if web.enabled = true
+#  11. Enables and starts the timers
 #
 # What this does NOT do:
 #   - Set up rclone (run `rclone config` separately)
@@ -104,6 +106,7 @@ print(f'{h:02d}:{m:02d}')
 
 SMB_ENABLED=$(read_yaml_value "destinations.smb.enabled" || true)
 RCLONE_ENABLED=$(read_yaml_value "destinations.rclone.enabled" || true)
+WEB_ENABLED=$(read_yaml_value "web.enabled" || true)
 
 [[ "$PROJECT_DIR" == "$PROJECT_DIR_CFG" ]] || warn \
 "config.yaml says project_dir=$PROJECT_DIR_CFG, but you're running from $PROJECT_DIR.
@@ -117,7 +120,13 @@ id -u "$PI_USER" >/dev/null 2>&1 || die "pi_user '$PI_USER' from config.yaml doe
 log "creating virtualenv at $PROJECT_DIR/.venv"
 sudo -u "$PI_USER" python3 -m venv "$PROJECT_DIR/.venv"
 sudo -u "$PI_USER" "$PROJECT_DIR/.venv/bin/pip" install --upgrade pip wheel
-sudo -u "$PI_USER" "$PROJECT_DIR/.venv/bin/pip" install -e "$PROJECT_DIR"
+
+if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
+    log "installing project with web extras"
+    sudo -u "$PI_USER" "$PROJECT_DIR/.venv/bin/pip" install -e "$PROJECT_DIR[web]"
+else
+    sudo -u "$PI_USER" "$PROJECT_DIR/.venv/bin/pip" install -e "$PROJECT_DIR"
+fi
 
 # ─────────────────────── boot config ───────────────────────
 
@@ -170,6 +179,35 @@ $PI_USER ALL=(root) NOPASSWD: /usr/bin/tee /proc/sys/vm/drop_caches
 EOF
 chmod 0440 "$SUDOERS"
 visudo -cf "$SUDOERS" >/dev/null
+
+# ─────────────────────── web UI prerequisites ───────────────────────
+
+if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
+    WEB_MOUNT=$(read_yaml_value "web.mount_point")
+    if [[ -n "$WEB_MOUNT" ]]; then
+        log "creating web UI mount point at $WEB_MOUNT"
+        mkdir -p "$WEB_MOUNT"
+        chown "$PI_USER:$PI_USER" "$WEB_MOUNT"
+
+        # Append the web mount sudoers rule. The web service uses the
+        # same sudo entry pattern as the sync service.
+        WEB_SUDOERS=/etc/sudoers.d/blink-usb-bridge-web
+        log "writing web sudoers entry to $WEB_SUDOERS"
+        cat > "$WEB_SUDOERS" <<EOF
+# Allow blink-usb-bridge web UI to mount/unmount its own copy of the backing image
+$PI_USER ALL=(root) NOPASSWD: /bin/mount -o ro\,loop\,offset=*\,noatime\,nodev\,nosuid\,noexec $BACKING_IMAGE_PATH $WEB_MOUNT
+$PI_USER ALL=(root) NOPASSWD: /bin/umount $WEB_MOUNT
+EOF
+        chmod 0440 "$WEB_SUDOERS"
+        visudo -cf "$WEB_SUDOERS" >/dev/null
+    fi
+
+    if ! command -v avahi-daemon >/dev/null 2>&1; then
+        log "installing avahi-daemon for .local mDNS discovery"
+        apt-get install -y avahi-daemon avahi-utils
+    fi
+    systemctl enable --now avahi-daemon >/dev/null 2>&1 || true
+fi
 
 # ─────────────────────── SMB fstab entry ───────────────────────
 
@@ -230,6 +268,9 @@ if [[ "$RCLONE_ENABLED" == "True" || "$RCLONE_ENABLED" == "true" ]]; then
     generate bub-prune.service
     generate bub-prune.timer
 fi
+if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
+    generate bub-web.service
+fi
 
 systemctl daemon-reload
 
@@ -239,6 +280,9 @@ systemctl enable --now blink-sync.timer
 systemctl enable --now blink-wipe.timer
 if [[ "$RCLONE_ENABLED" == "True" || "$RCLONE_ENABLED" == "true" ]]; then
     systemctl enable --now bub-prune.timer
+fi
+if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
+    systemctl enable --now bub-web.service
 fi
 
 # ─────────────────────── done ───────────────────────
@@ -252,6 +296,12 @@ log "  3. Open the Blink app, you'll see a prompt to format the new USB drive �
 log "  4. Trigger a motion event on a camera and watch:"
 log "       journalctl -u blink-sync.service -f"
 log ""
+if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
+    HOSTNAME_LOCAL=$(hostname).local
+    WEB_PORT=$(read_yaml_value "web.listen_port")
+    log "Web UI: http://${HOSTNAME_LOCAL}:${WEB_PORT:-8080}/"
+    log ""
+fi
 if [[ "$RCLONE_ENABLED" == "True" || "$RCLONE_ENABLED" == "true" ]]; then
     log "rclone is enabled — make sure you've run 'rclone config' to set up the remote."
 fi

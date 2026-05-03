@@ -10,8 +10,9 @@ nightly would mean a confirmation prompt every morning.
 Instead we:
   1. Take the gadget offline (SM2 sees device disconnect)
   2. Mount the same exFAT filesystem read-write
-  3. Delete YY-MM/ subtrees inside /blink/ (the actual clip data)
-     while preserving:
+  3. Either delete all YY-MM/ subtrees, OR keep the most recent N days
+     and delete only older clips, depending on wipe.retention_days.
+     In all modes we preserve:
         /blink/                  — the SM2's expected root
         /blink/.tmp/             — staging area
         /blink_backup/           — paid Clip Backup feature
@@ -20,6 +21,12 @@ Instead we:
 
 The SM2 sees the same drive (same UUID, same skeleton) come back online
 and resumes recording without any human interaction.
+
+Retention modes
+---------------
+- retention_days = 0  → delete everything (smallest disk footprint)
+- retention_days = N  → keep last N days on the Pi too (extra safety net
+                        if destinations are temporarily unreachable)
 
 WARNING
 -------
@@ -93,15 +100,17 @@ def run(c: cfg.Config) -> int:
             log.warning("%s missing — SM2 may not have formatted yet", clips_dir)
             return 0
 
-        # Delete only YY-MM month directories. Skeleton (clips_dir,
-        # .tmp/, blink_backup/) stays untouched.
-        deleted = 0
-        for entry in clips_dir.iterdir():
-            if entry.is_dir() and sm2.MONTH_DIR_RE.match(entry.name):
-                log.info("removing %s", entry)
-                _rmtree(entry)
-                deleted += 1
-        log.info("removed %d month directories", deleted)
+        if c.wipe.retention_days == 0:
+            deleted = _delete_all_months(clips_dir)
+            log.info("removed %d month directories (retention=0)", deleted)
+        else:
+            files_deleted, dirs_cleaned = _delete_older_than(
+                clips_dir, c.wipe.retention_days,
+            )
+            log.info(
+                "kept last %d days; deleted %d files, cleaned %d empty dirs",
+                c.wipe.retention_days, files_deleted, dirs_cleaned,
+            )
 
         # Verify the skeleton survived.
         for required in (
@@ -145,6 +154,71 @@ def _rmtree(path: Path) -> None:
         path.rmdir()
     else:
         path.unlink()
+
+
+def _delete_all_months(clips_dir: Path) -> int:
+    """Original behavior: delete every YY-MM/ directory."""
+    count = 0
+    for entry in clips_dir.iterdir():
+        if entry.is_dir() and sm2.MONTH_DIR_RE.match(entry.name):
+            log.info("removing %s", entry)
+            _rmtree(entry)
+            count += 1
+    return count
+
+
+def _delete_older_than(clips_dir: Path, retention_days: int) -> tuple[int, int]:
+    """Walk YY-MM/YY-MM-DD/ and delete clips older than retention_days.
+
+    Returns (files_deleted, empty_dirs_cleaned). After deleting old files
+    we also remove now-empty YY-MM-DD/ and YY-MM/ directories so the
+    listing stays tidy. The SM2's own .tmp/ and the blink_backup/
+    skeleton are never touched.
+
+    Cutoff is calculated against the SM2's UTC clock (clip paths are UTC).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    files_deleted = dirs_cleaned = 0
+
+    for month_dir in sorted(clips_dir.iterdir()):
+        if not (month_dir.is_dir() and sm2.MONTH_DIR_RE.match(month_dir.name)):
+            continue
+
+        for day_dir in sorted(month_dir.iterdir()):
+            day_m = sm2.DATE_DIR_RE.match(day_dir.name)
+            if not (day_dir.is_dir() and day_m):
+                continue
+            yy, mm, dd = day_m.groups()
+            try:
+                day_date = datetime(
+                    2000 + int(yy), int(mm), int(dd),
+                    tzinfo=timezone.utc,
+                )
+            except ValueError:
+                continue
+
+            # If the entire day is older than cutoff, drop the whole dir.
+            # End-of-day = next-day midnight; only safe to bulk-drop if
+            # the whole day is past the cutoff.
+            day_end = day_date + timedelta(days=1)
+            if day_end <= cutoff:
+                file_count = sum(1 for _ in day_dir.iterdir())
+                log.info("removing whole day %s (%d files)", day_dir, file_count)
+                _rmtree(day_dir)
+                files_deleted += file_count
+                dirs_cleaned += 1
+
+        # Clean up empty month dirs.
+        try:
+            next(month_dir.iterdir())
+        except StopIteration:
+            log.info("removing empty month dir %s", month_dir)
+            month_dir.rmdir()
+            dirs_cleaned += 1
+
+    return files_deleted, dirs_cleaned
 
 
 def main() -> int:

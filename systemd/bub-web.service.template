@@ -1,0 +1,18 @@
+[Unit]
+Description=Blink USB bridge — local web UI for browsing clips
+After=network-online.target blink-gadget.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@PI_USER@
+WorkingDirectory=@PROJECT_DIR@
+Environment=BUB_CONFIG=@PROJECT_DIR@/config.yaml
+ExecStart=@PROJECT_DIR@/.venv/bin/bub-web
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

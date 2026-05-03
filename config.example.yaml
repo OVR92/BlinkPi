@@ -119,6 +119,47 @@ destinations:
     prune_marker: __blinkpi__
 
 # ──────────────────────────────────────────────────────────────────────────
+# Nightly wipe behavior
+# ──────────────────────────────────────────────────────────────────────────
+
+wipe:
+
+  # How many days of clips to keep on the Pi's backing image after each
+  # nightly wipe.
+  #
+  #   0 = delete everything every night (smallest disk footprint, no
+  #       buffer if your destinations are temporarily unreachable)
+  #   N = keep the most recent N days; clips older than N days get
+  #       deleted. Provides a safety buffer in case SMB/rclone is down
+  #       for a few days. Make sure your `backing_image_size` is big
+  #       enough to hold N days of clips.
+  retention_days: 7
+
+# ──────────────────────────────────────────────────────────────────────────
+# Local web UI (optional)
+# ──────────────────────────────────────────────────────────────────────────
+
+web:
+
+  # Browse clips on the Pi itself at http://<pi-hostname>.local:8080.
+  # The web UI mounts the backing image read-only and serves clips
+  # directly — no SMB or cloud required.
+  enabled: false
+
+  # IP to listen on. 0.0.0.0 = reachable from anywhere on your LAN.
+  # 127.0.0.1 = only reachable from the Pi itself (use with a reverse proxy).
+  listen_host: "0.0.0.0"
+
+  # Port. 8080 is a sensible default. Avoid 80 unless you've thought
+  # about port conflicts and don't mind running as root.
+  listen_port: 8080
+
+  # Where the web UI mounts the backing image. Must be different from
+  # the sync service's mount_point — they need independent mounts so
+  # the gadget cycling during nightly wipe doesn't disrupt browsing.
+  mount_point: /home/pi/blink-usb-bridge/web_mount
+
+# ──────────────────────────────────────────────────────────────────────────
 # Validation thresholds — most users never touch these
 # ──────────────────────────────────────────────────────────────────────────
 

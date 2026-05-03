@@ -51,6 +51,26 @@ class Validation:
 
 
 @dataclass(frozen=True)
+class Wipe:
+    """Nightly cleanup behavior.
+
+    retention_days = 0  → delete everything (original behavior, lowest disk use)
+    retention_days = N  → keep the last N days of clips on the backing image
+                          (still requires periodic cleanup or the image fills up)
+    """
+    retention_days: int
+
+
+@dataclass(frozen=True)
+class Web:
+    """Local web UI for browsing clips on the Pi itself."""
+    enabled: bool
+    listen_host: str       # e.g. "0.0.0.0" for LAN-wide, "127.0.0.1" for local-only
+    listen_port: int
+    mount_point: Path      # independent loop-mount, separate from sync's mount
+
+
+@dataclass(frozen=True)
 class Config:
     pi_user: str
     project_dir: Path
@@ -63,6 +83,8 @@ class Config:
     smb: SmbDestination
     rclone: RcloneDestination
     validation: Validation
+    wipe: Wipe
+    web: Web
 
     @property
     def state_file(self) -> Path:
@@ -150,6 +172,21 @@ def load(path: Optional[Path] = None) -> Config:
         ffprobe_timeout_seconds=int(val_raw.get("ffprobe_timeout_seconds", 10)),
     )
 
+    wipe_raw = raw.get("wipe") or {}
+    wipe = Wipe(
+        retention_days=int(wipe_raw.get("retention_days", 0)),
+    )
+    if wipe.retention_days < 0:
+        raise ValueError(f"wipe.retention_days must be >= 0, got {wipe.retention_days}")
+
+    web_raw = raw.get("web") or {}
+    web = Web(
+        enabled=_coerce_bool(web_raw.get("enabled", False)),
+        listen_host=str(web_raw.get("listen_host", "0.0.0.0")),
+        listen_port=int(web_raw.get("listen_port", 8080)),
+        mount_point=_path(web_raw.get("mount_point", "/home/pi/blink-usb-bridge/web_mount")),
+    )
+
     return Config(
         pi_user=str(_require(raw, "pi_user", "")),
         project_dir=_path(_require(raw, "project_dir", "")),
@@ -162,4 +199,6 @@ def load(path: Optional[Path] = None) -> Config:
         smb=smb,
         rclone=rclone,
         validation=validation,
+        wipe=wipe,
+        web=web,
     )

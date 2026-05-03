@@ -29,7 +29,7 @@ sudo apt install -y python3-venv python3-pip ffmpeg cifs-utils rclone git
 On the machine that will host the share:
 
 1. Create a folder, e.g. `C:\BlinkClips` (Windows) or `/mnt/big_drive/blink` (Linux).
-2. Share it with read-write permissions for a dedicated user — never your main login account.
+2. Share it with read-write permissions for a dedicated user.
 3. On the Pi, create a credentials file:
 
 ```bash

@@ -1,0 +1,41 @@
+# Local configuration — NEVER commit
+config.yaml
+.env
+*.local
+
+# Credentials
+*credentials*
+*-credentials
+sa-key.json
+*.key
+secrets/
+
+# Backing image (large, machine-specific)
+*.img
+usb_backing.img
+
+# Runtime state
+sync_state.json
+*.log
+
+# Generated systemd unit files (templates are committed; generated ones are not)
+systemd/generated/
+*.service.generated
+*.timer.generated
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.tox/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

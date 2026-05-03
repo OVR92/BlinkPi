@@ -1,0 +1,13 @@
+[Unit]
+Description=Blink USB bridge — sync clips from SM2 to destinations
+After=blink-gadget.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@PI_USER@
+WorkingDirectory=@PROJECT_DIR@
+Environment=BUB_CONFIG=@PROJECT_DIR@/config.yaml
+ExecStart=@PROJECT_DIR@/.venv/bin/bub-sync
+StandardOutput=journal
+StandardError=journal

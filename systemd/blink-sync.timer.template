@@ -1,0 +1,14 @@
+[Unit]
+Description=Periodic Blink clip sync
+Requires=blink-sync.service
+
+[Timer]
+OnBootSec=@POLL_INTERVAL_SECONDS@s
+OnUnitActiveSec=@POLL_INTERVAL_SECONDS@s
+# Default systemd accuracy is 1 minute, which would round our short
+# intervals up. Keep it tight.
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

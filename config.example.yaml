@@ -1,0 +1,138 @@
+# blink-usb-bridge configuration
+# Copy to config.yaml and edit. All paths must be absolute.
+
+# ──────────────────────────────────────────────────────────────────────────
+# Pi-side settings
+# ──────────────────────────────────────────────────────────────────────────
+
+# The unprivileged user the sync service runs as. Must exist on the Pi
+# and have NOPASSWD sudo for `mount`, `umount`, and `tee /proc/sys/vm/drop_caches`.
+# See docs/INSTALL.md for the exact sudoers entry.
+pi_user: pi
+
+# Where the project lives on the Pi. The installer creates this dir.
+project_dir: /home/pi/blink-usb-bridge
+
+# The fake-USB-drive backing image. Created by the installer on first run.
+# Size should be larger than ~24 hours of expected motion clips. Most
+# households are fine with 2–10 GB.
+backing_image_path: /home/pi/blink-usb-bridge/usb_backing.img
+backing_image_size: 4G
+
+# Where the SM2's filesystem will be loop-mounted read-only during sync.
+mount_point: /home/pi/blink-usb-bridge/usb_mount
+
+# Local timezone — clip timestamps in destination filenames are converted
+# from the SM2's UTC timestamps to this zone for human readability.
+# Use IANA names (e.g. "America/Los_Angeles", "Europe/Berlin", "UTC").
+timezone: UTC
+
+# How often to scan for new clips. Lower = faster sync, more CPU/network.
+# 30s is a good balance; values under 10s tend to be wasteful.
+poll_interval_seconds: 30
+
+# Time of day (24-hour, local time) for the nightly wipe job. The wipe
+# detaches the gadget, deletes old clip directories from the backing image
+# (preserving the SM2's filesystem skeleton so it doesn't re-prompt for
+# format), and reattaches.
+nightly_wipe_time: "03:00"
+
+# ──────────────────────────────────────────────────────────────────────────
+# Filename scheme for synced clips
+# ──────────────────────────────────────────────────────────────────────────
+#
+# All destinations use this base format:
+#   YYYY-MM-DD_HH-MM-SS_<camera>.mp4
+# e.g.  2026-04-27_21-38-40_garage.mp4
+#
+# Per-destination tweaks (subfolder layout, filename markers) are in each
+# destination's section below.
+
+# ──────────────────────────────────────────────────────────────────────────
+# Destinations — enable any combination
+# ──────────────────────────────────────────────────────────────────────────
+
+destinations:
+
+  # SMB / CIFS share — the most common destination. A Windows folder
+  # shared on your LAN works perfectly. NAS shares work too.
+  smb:
+    enabled: true
+
+    # Server hostname or IP, plus the share name. Pi mounts this via
+    # /etc/fstab automount; the installer sets that up for you.
+    server: 192.168.1.10
+    share: BlinkClips
+
+    # Path to a credentials file mode 0600 root:root containing:
+    #   username=USER
+    #   password=PASS
+    # See docs/INSTALL.md for the exact format.
+    credentials_file: /etc/samba/credentials/blink
+
+    # Where the Pi will mount the share locally.
+    mount_point: /mnt/blink-share
+
+    # SMB protocol version. "3.0" is widely supported and secure;
+    # "default" lets the kernel negotiate.
+    smb_version: "3.0"
+
+    # Folder layout on the share:
+    #   per_camera  → <share>/<camera>/<filename>.mp4   (recommended)
+    #   flat        → <share>/<filename>.mp4
+    layout: per_camera
+
+    # No retention here — SMB destination is intended as your archive.
+    # Old clips stay forever unless you delete them yourself.
+
+  # rclone — push to any of rclone's 70+ supported backends (Google
+  # Drive, Dropbox, S3, B2, etc). Set up rclone separately first.
+  rclone:
+    enabled: false
+
+    # The rclone remote to copy clips to. The trailing colon is required.
+    # If you want a subfolder, use "remote:Subfolder".
+    remote: "gdrive:"
+
+    # Path to your rclone config file. Default location is fine for most.
+    config_file: /home/pi/.config/rclone/rclone.conf
+
+    # Filename layout on the remote:
+    #   flat       → <remote>/<filename>.mp4   (recommended for cloud)
+    #   per_camera → <remote>/<camera>/<filename>.mp4
+    layout: flat
+
+    # Retention. The pruner runs nightly (a few minutes after the wipe)
+    # and deletes files older than this. Set to 0 to disable pruning.
+    retention_days: 7
+
+    # If true, deleted files are removed permanently (skipping the
+    # remote's trash/recycle bin). Required for some quota use-cases
+    # but irreversible — use with care.
+    use_trash: true
+
+    # All pruned filenames must contain this substring as a safety
+    # filter — the pruner refuses to delete files that don't match it.
+    # The sync script appends this marker to every filename pushed to
+    # rclone, so under normal operation it just works. Don't change
+    # unless you know what you're doing.
+    prune_marker: __blinkpi__
+
+# ──────────────────────────────────────────────────────────────────────────
+# Validation thresholds — most users never touch these
+# ──────────────────────────────────────────────────────────────────────────
+
+validation:
+
+  # Minimum file size before we even consider syncing. Real SM2 clips are
+  # always >700 KB; this floor rejects 0-byte stubs and partial writes.
+  min_bytes: 65536
+
+  # We re-check size+mtime after this delay; if either changed, the file
+  # is still being written and we'll retry next cycle. The SM2's atomic
+  # rename should make this redundant, but exFAT has no multi-host
+  # coordination so a tiny window catches rare metadata races.
+  settle_seconds: 0.5
+
+  # Maximum time `ffprobe` can take before we give up on a clip.
+  ffprobe_timeout_seconds: 10

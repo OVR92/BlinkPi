@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly Blink backing-image cleanup
+Requires=blink-wipe.service
+
+[Timer]
+OnCalendar=*-*-* @NIGHTLY_WIPE_TIME@:00
+AccuracySec=1m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

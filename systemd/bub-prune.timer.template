@@ -1,0 +1,13 @@
+[Unit]
+Description=Nightly rclone prune for blink-usb-bridge
+Requires=bub-prune.service
+
+[Timer]
+# Run 30 minutes after the wipe so the wipe's pre-sync has time to push
+# anything still pending before old files age out on the remote.
+OnCalendar=*-*-* @PRUNE_TIME@:00
+AccuracySec=1m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

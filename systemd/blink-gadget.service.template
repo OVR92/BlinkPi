@@ -1,0 +1,15 @@
+[Unit]
+Description=Blink USB mass-storage gadget
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Pi presents the backing image as a USB mass-storage device.
+# stall=0 prevents the gadget from advertising stall, which the SM2 mishandles.
+# removable=1 makes the SM2 see this as a removable drive.
+ExecStart=/sbin/modprobe g_mass_storage file=@BACKING_IMAGE_PATH@ stall=0 removable=1 ro=0
+ExecStop=/sbin/modprobe -r g_mass_storage
+
+[Install]
+WantedBy=multi-user.target

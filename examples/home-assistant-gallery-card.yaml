@@ -3,7 +3,7 @@
 # storage source in HA (Settings → System → Storage → Add network storage)
 # with usage type "Media".
 #
-# Replace `kitchen_blink` with the name you gave your network storage,
+# Replace `blinkStorage` with the name you gave your network storage,
 # and the camera folder names with your camera names.
 #
 # Requires the gallery-card custom card from HACS:
@@ -12,7 +12,7 @@
 type: custom:gallery-card
 title: Driveway
 entities:
-  - path: media-source://media_source/kitchen_blink/Driveway/
+  - path: media-source://media_source/blinkStorage/Driveway/
 file_name_format: YYYY-MM-DD_HH-mm-ss
 caption_format: MMM D h:mm:ss A
 maximum_files: 50

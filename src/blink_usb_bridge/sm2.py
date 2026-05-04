@@ -62,7 +62,21 @@ from typing import Optional
 
 
 # Bytes from start of the disk image to the start of the exFAT partition.
-PARTITION_OFFSET = 16384
+def partition_offset(image_path) -> int:
+    """Read the first partition start sector from the MBR and return its byte offset.
+
+    Falls back to 16384 (sector 32) if the image is unreadable or has no partition table.
+    """
+    import struct
+    try:
+        with open(image_path, "rb") as f:
+            f.seek(446 + 8)  # MBR partition entry 1, start LBA
+            start = struct.unpack("<I", f.read(4))[0]
+        if start > 0:
+            return start * 512
+    except OSError:
+        pass
+    return 16384  # fallback: sector 32
 
 # Top-level directory the SM2 stores clips in.
 CLIPS_ROOT = "blink"

@@ -85,7 +85,7 @@ def _mount_ro(image: Path, mount_point: Path) -> bool:
         return True
     cmd = [
         "sudo", "-n", "mount",
-        "-o", f"ro,loop,offset={sm2.PARTITION_OFFSET},noatime,nodev,nosuid,noexec",
+        "-o", f"ro,loop,offset={sm2.partition_offset(image)},noatime,nodev,nosuid,noexec",
         str(image), str(mount_point),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)

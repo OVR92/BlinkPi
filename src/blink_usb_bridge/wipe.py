@@ -86,7 +86,7 @@ def run(c: cfg.Config) -> int:
     c.mount_point.mkdir(parents=True, exist_ok=True)
     mount_cmd = [
         "mount",
-        "-o", f"loop,offset={sm2.PARTITION_OFFSET}",
+        "-o", f"loop,offset={sm2.partition_offset(c.backing_image_path)}",
         str(c.backing_image_path), str(c.mount_point),
     ]
     if subprocess.run(mount_cmd).returncode != 0:

@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/polling-30s-green" alt="30s polling">
 </p>
 
-> ⚠️ **Beta:** Most code is AI-assisted. Works well in real-world use but may have rough edges — please report issues.
+> ⚠️ **Beta:** Most code is AI-assisted. Work's well for me, but not yet fully vetted — please report issues.
 
 ---
 

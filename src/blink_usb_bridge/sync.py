@@ -7,6 +7,7 @@ us retry failed pushes on the next run without re-pushing succeeded ones.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -130,8 +131,8 @@ def _is_ready(p: Path, val: cfg.Validation) -> bool:
     return first == second
 
 
-def _ffprobe_ok(p: Path, timeout: int) -> bool:
-    """True if ffprobe parses the clip as MP4 with non-zero duration."""
+def _ffprobe_duration(p: Path, timeout: int) -> Optional[float]:
+    """Return clip duration in seconds, or None if the file is unreadable/invalid."""
     try:
         result = subprocess.run(
             [
@@ -144,13 +145,39 @@ def _ffprobe_ok(p: Path, timeout: int) -> bool:
         )
     except subprocess.TimeoutExpired:
         log.warning("ffprobe timed out on %s", p.name)
-        return False
+        return None
     if result.returncode != 0:
-        return False
+        return None
     try:
-        return float(result.stdout.strip()) > 0.0
+        d = float(result.stdout.strip())
+        return d if d > 0.0 else None
     except ValueError:
-        return False
+        return None
+
+
+def _thumbnail_path(thumbnail_dir: Path, rel_path: str) -> Path:
+    key = hashlib.sha256(rel_path.encode()).hexdigest()
+    return thumbnail_dir / f"{key}.jpg"
+
+
+def _make_thumbnail(src: Path, dest: Path, duration: float) -> bool:
+    """Extract a single JPEG frame and write it to dest. Returns True on success."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    seek = min(1.0, duration * 0.3)
+    # Try seeking into the clip; fall back to first frame for very short clips.
+    for extra in (["-ss", str(seek)], []):
+        try:
+            r = subprocess.run(
+                ["ffmpeg", *extra, "-i", str(src),
+                 "-vframes", "1", "-vf", "scale=320:-1",
+                 "-q:v", "5", "-f", "image2", str(dest), "-y"],
+                capture_output=True, timeout=20,
+            )
+        except subprocess.TimeoutExpired:
+            return False
+        if r.returncode == 0 and dest.exists():
+            return True
+    return False
 
 
 def _walk_clips(mount_point: Path) -> Iterable[Path]:
@@ -219,9 +246,14 @@ def run(c: cfg.Config) -> int:
 
             if not _is_ready(clip_path, c.validation):
                 continue
-            if not _ffprobe_ok(clip_path, c.validation.ffprobe_timeout_seconds):
+            duration = _ffprobe_duration(clip_path, c.validation.ffprobe_timeout_seconds)
+            if duration is None:
                 log.info("ffprobe rejected: %s", rel)
                 continue
+
+            thumb = _thumbnail_path(c.thumbnail_dir, rel)
+            if not thumb.exists():
+                _make_thumbnail(clip_path, thumb, duration)
 
             parsed = sm2.parse(rel)
             if parsed is None:

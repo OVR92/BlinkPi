@@ -22,7 +22,6 @@ import logging
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -37,8 +36,27 @@ log = logging.getLogger(__name__)
 _HERE = Path(__file__).parent
 INDEX_HTML = _HERE / "web_index.html"
 
-# Thumbnail JPEG cache — keyed by SHA-256 of rel_path (clips are read-only).
-_THUMB_CACHE = Path(tempfile.gettempdir()) / "blinkpi_thumbs"
+def _thumbnail_path(thumbnail_dir: Path, rel_path: str) -> Path:
+    key = hashlib.sha256(rel_path.encode()).hexdigest()
+    return thumbnail_dir / f"{key}.jpg"
+
+
+def _generate_thumbnail(src: Path, dest: Path) -> bool:
+    """Generate a thumbnail, trying t=1s then falling back to first frame."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    for extra in (["-ss", "1"], []):
+        try:
+            r = subprocess.run(
+                ["ffmpeg", *extra, "-i", str(src),
+                 "-vframes", "1", "-vf", "scale=320:-1",
+                 "-q:v", "5", "-f", "image2", str(dest), "-y"],
+                capture_output=True, timeout=20,
+            )
+        except subprocess.TimeoutExpired:
+            return False
+        if r.returncode == 0 and dest.exists():
+            return True
+    return False
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -215,21 +233,9 @@ def make_app(c: cfg.Config):
         if not target.is_file() or target.suffix.lower() != ".mp4":
             raise HTTPException(404, "not found")
 
-        cache_key = hashlib.sha256(rel_path.encode()).hexdigest()
-        _THUMB_CACHE.mkdir(parents=True, exist_ok=True)
-        thumb_path = _THUMB_CACHE / f"{cache_key}.jpg"
-
+        thumb_path = _thumbnail_path(c.thumbnail_dir, rel_path)
         if not thumb_path.exists():
-            result = subprocess.run(
-                [
-                    "ffmpeg", "-ss", "1", "-i", str(target),
-                    "-vframes", "1", "-vf", "scale=320:-1",
-                    "-q:v", "5", "-f", "image2", str(thumb_path), "-y",
-                ],
-                capture_output=True,
-                timeout=20,
-            )
-            if result.returncode != 0 or not thumb_path.exists():
+            if not _generate_thumbnail(target, thumb_path):
                 raise HTTPException(404, "thumbnail generation failed")
 
         return FileResponse(

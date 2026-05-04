@@ -94,6 +94,10 @@ class Config:
     def log_file(self) -> Path:
         return self.project_dir / "sync.log"
 
+    @property
+    def thumbnail_dir(self) -> Path:
+        return self.project_dir / "thumbnails"
+
 
 def _coerce_bool(value: object) -> bool:
     if isinstance(value, bool):

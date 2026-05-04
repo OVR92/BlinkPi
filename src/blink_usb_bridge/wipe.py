@@ -36,6 +36,7 @@ CLI (which the systemd unit calls), not directly from a normal shell.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import subprocess
@@ -121,6 +122,10 @@ def run(c: cfg.Config) -> int:
             if not required.exists():
                 log.warning("expected directory missing after wipe: %s", required)
 
+        removed = _prune_thumbnails(c)
+        if removed:
+            log.info("pruned %d stale thumbnails", removed)
+
         subprocess.run(["sync"])
     finally:
         log.info("unmounting %s", c.mount_point)
@@ -144,6 +149,33 @@ def run(c: cfg.Config) -> int:
 
     log.info("wipe complete")
     return 0
+
+
+def _prune_thumbnails(c: cfg.Config) -> int:
+    """Remove thumbnails for clips that no longer exist on the backing image.
+
+    Called while the image is still mounted RW so we can enumerate survivors.
+    """
+    if not c.thumbnail_dir.exists():
+        return 0
+
+    clips_dir = c.mount_point / sm2.CLIPS_ROOT
+    alive: set[str] = set()
+    if clips_dir.exists():
+        for p in clips_dir.rglob("*.mp4"):
+            if not p.is_file():
+                continue
+            rel = str(p.relative_to(c.mount_point))
+            if sm2.is_skippable(rel):
+                continue
+            alive.add(hashlib.sha256(rel.encode()).hexdigest())
+
+    removed = 0
+    for thumb in c.thumbnail_dir.glob("*.jpg"):
+        if thumb.stem not in alive:
+            thumb.unlink(missing_ok=True)
+            removed += 1
+    return removed
 
 
 def _rmtree(path: Path) -> None:

@@ -189,3 +189,9 @@ Point HA's network storage at the same SMB share the Pi pushes to and browse cli
 ---
 
 *MIT License · Not affiliated with Blink or Amazon · Most code is AI-assisted — use at your own risk*
+
+
+<a href="https://www.buymeacoffee.com/olafreese" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" 
+       alt="Buy Me A Coffee" height="50">
+</a>

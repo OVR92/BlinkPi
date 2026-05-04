@@ -27,8 +27,8 @@ The SM2 has no idea anything unusual is happening — from its perspective it's 
 
 > **Note on cloud dependency:** Blink cameras may require an active connection to
 > Blink's servers to function, and clips may travel via the cloud before reaching
-> the Sync Module. BlinkPi only handles clips *after* they land on local storage —
-> it does not bypass the cloud capture pipeline.
+> the Sync Module (depending on model). BlinkPi only handles clips *after* they land on local storage,
+> it does not bypass any cloud capture pipelines.
 
 ---
 

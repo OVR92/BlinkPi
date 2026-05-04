@@ -25,6 +25,11 @@ The Pi uses Linux's `g_mass_storage` gadget to present a backing image file as a
 
 The SM2 has no idea anything unusual is happening — from its perspective it's a normal USB flash drive.
 
+> **Note on cloud dependency:** Blink cameras may require an active connection to
+> Blink's servers to function, and clips may travel via the cloud before reaching
+> the Sync Module. BlinkPi only handles clips *after* they land on local storage —
+> it does not bypass the cloud capture pipeline.
+
 ---
 
 ## What you get

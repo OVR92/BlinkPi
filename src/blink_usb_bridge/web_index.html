@@ -46,7 +46,22 @@
     color: var(--fg-3);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
+    flex: 1;
   }
+  .refresh-btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    color: var(--fg-2);
+    font: inherit;
+    font-size: 13px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .refresh-btn:hover { color: var(--fg); border-color: var(--fg-3); }
+  .refresh-btn:disabled { opacity: 0.4; cursor: default; }
   .filters {
     display: flex; gap: 6px; flex-wrap: wrap;
   }
@@ -102,7 +117,9 @@
     display: flex; align-items: center; justify-content: center;
     pointer-events: none;
     opacity: 0.85;
+    transition: opacity 0.12s;
   }
+  .clip:hover .play { opacity: 0.65; }
   .clip .play svg {
     width: 56px; height: 56px;
     color: rgba(255,255,255,0.95);
@@ -130,6 +147,32 @@
     border-radius: 5px;
     text-transform: lowercase;
   }
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+    color: var(--fg-3);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .page-btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    color: var(--fg-2);
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .page-btn:hover:not(:disabled) { color: var(--fg); border-color: var(--fg-3); }
+  .page-btn:disabled { opacity: 0.3; cursor: default; }
 
   /* Modal player */
   .modal {
@@ -202,6 +245,7 @@
   <div class="title">
     <h1>BlinkPi</h1>
     <div class="stats" id="stats"></div>
+    <button class="refresh-btn" id="refresh-btn">Refresh</button>
   </div>
   <div class="filters" id="cam-filters" role="group" aria-label="Camera filter">
     <button class="chip" data-cam="all" aria-pressed="true">All cameras</button>
@@ -214,6 +258,11 @@
     <div class="spinner"></div>
     <div style="margin-top: 14px;">Loading clips…</div>
   </div>
+  <div class="pagination" id="pagination" style="display: none;">
+    <button class="page-btn" id="prev-btn">← Prev</button>
+    <span id="page-info"></span>
+    <button class="page-btn" id="next-btn">Next →</button>
+  </div>
   <div class="status" id="status"></div>
 </main>
 
@@ -224,9 +273,12 @@
 </div>
 
 <script>
+const PAGE_SIZE = 24;
+
 const state = {
   clips: [],
   cameraFilter: "all",
+  page: 0,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -258,15 +310,22 @@ function escapeHTML(s) {
 }
 
 async function loadClips() {
+  const btn = $("#refresh-btn");
+  btn.disabled = true;
+  btn.textContent = "Loading…";
   try {
     const res = await fetch("/api/clips");
     const data = await res.json();
     state.clips = data.clips || [];
+    state.page = 0;
     renderCameraChips();
     render();
   } catch (e) {
-    $("#empty").innerHTML = "Could not load clips.<br><div class='sub'>" + escapeHTML(e) + "</div>";
+    $("#empty").innerHTML = "Could not load clips.<br><div class='sub'>" + escapeHTML(String(e)) + "</div>";
     $("#empty").style.display = "block";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Refresh";
   }
 }
 
@@ -305,6 +364,7 @@ function renderCameraChips() {
       wrap.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", "false"));
       chip.setAttribute("aria-pressed", "true");
       state.cameraFilter = chip.dataset.cam;
+      state.page = 0;
       render();
     });
   });
@@ -315,9 +375,17 @@ function render() {
     ? state.clips
     : state.clips.filter(c => c.camera === state.cameraFilter);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (state.page >= totalPages) state.page = totalPages - 1;
+
+  const pageClips = filtered.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
+
+  const pageLabel = totalPages > 1
+    ? ` · page ${state.page + 1} of ${totalPages}`
+    : "";
   $("#stats").textContent = filtered.length === state.clips.length
-    ? `${state.clips.length} clips`
-    : `${filtered.length} of ${state.clips.length}`;
+    ? `${state.clips.length} clips${pageLabel}`
+    : `${filtered.length} of ${state.clips.length}${pageLabel}`;
 
   const grid = $("#grid");
   if (filtered.length === 0) {
@@ -326,14 +394,15 @@ function render() {
       ? "No clips yet.<div class='sub'>Trigger motion on a camera and they'll appear here.</div>"
       : "No clips match this filter.";
     $("#empty").style.display = "block";
+    $("#pagination").style.display = "none";
     return;
   }
 
   $("#empty").style.display = "none";
-  grid.innerHTML = filtered.map((c, i) => `
-    <div class="clip" data-i="${i}">
-      <video muted preload="metadata" playsinline
-             src="/clip/${encodeURI(c.rel_path)}#t=2"></video>
+
+  grid.innerHTML = pageClips.map((c, i) => `
+    <div class="clip" data-i="${i}" data-src="/clip/${encodeURI(c.rel_path)}">
+      <video muted preload="none" playsinline></video>
       <div class="play">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
       </div>
@@ -343,9 +412,44 @@ function render() {
   `).join("");
 
   grid.querySelectorAll(".clip").forEach(el => {
-    el.addEventListener("click", () => openModal(filtered[parseInt(el.dataset.i, 10)]));
+    const video = el.querySelector("video");
+    const src = el.dataset.src;
+
+    // Lazy thumbnail: fetch only on hover, only once
+    el.addEventListener("mouseenter", () => {
+      if (!video.src) {
+        video.src = src;
+        video.addEventListener("loadedmetadata", () => {
+          video.currentTime = Math.min(2, video.duration * 0.1);
+        }, { once: true });
+      }
+    }, { passive: true });
+
+    el.addEventListener("click", () => openModal(pageClips[parseInt(el.dataset.i, 10)]));
   });
+
+  // Pagination controls
+  const pager = $("#pagination");
+  if (totalPages > 1) {
+    pager.style.display = "flex";
+    $("#page-info").textContent = `${state.page + 1} / ${totalPages}`;
+    $("#prev-btn").disabled = state.page === 0;
+    $("#next-btn").disabled = state.page === totalPages - 1;
+  } else {
+    pager.style.display = "none";
+  }
 }
+
+$("#prev-btn").addEventListener("click", () => {
+  if (state.page > 0) { state.page--; render(); window.scrollTo(0, 0); }
+});
+$("#next-btn").addEventListener("click", () => {
+  const filtered = state.cameraFilter === "all"
+    ? state.clips
+    : state.clips.filter(c => c.camera === state.cameraFilter);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  if (state.page < totalPages - 1) { state.page++; render(); window.scrollTo(0, 0); }
+});
 
 function openModal(clip) {
   $("#modal-video").src = "/clip/" + encodeURI(clip.rel_path);
@@ -363,15 +467,12 @@ function closeModal() {
 $("#modal-close").addEventListener("click", closeModal);
 $("#modal").addEventListener("click", e => { if (e.target === $("#modal")) closeModal(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+$("#refresh-btn").addEventListener("click", loadClips);
 
-// Initial load
+// Initial load only — no auto-refresh
 $("#empty").style.display = "block";
 loadClips();
 loadStatus();
-
-// Periodic refresh
-setInterval(loadClips, 30000);
-setInterval(loadStatus, 15000);
 </script>
 </body>
 </html>

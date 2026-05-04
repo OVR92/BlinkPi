@@ -17,10 +17,12 @@ service cycling during the nightly wipe gracefully.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -34,6 +36,9 @@ log = logging.getLogger(__name__)
 # Path to the bundled HTML asset, served at GET /.
 _HERE = Path(__file__).parent
 INDEX_HTML = _HERE / "web_index.html"
+
+# Thumbnail JPEG cache — keyed by SHA-256 of rel_path (clips are read-only).
+_THUMB_CACHE = Path(tempfile.gettempdir()) / "blinkpi_thumbs"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -194,6 +199,43 @@ def make_app(c: cfg.Config):
             target,
             media_type="video/mp4",
             filename=target.name,
+        )
+
+    @app.get("/thumbnail/{rel_path:path}")
+    def serve_thumbnail(rel_path: str):
+        if not _ensure_mounted(c):
+            raise HTTPException(503, "backing image not mounted")
+        if sm2.is_skippable(rel_path):
+            raise HTTPException(404, "not found")
+        target = (c.web.mount_point / rel_path).resolve()
+        try:
+            target.relative_to(c.web.mount_point.resolve())
+        except ValueError:
+            raise HTTPException(403, "path outside mount")
+        if not target.is_file() or target.suffix.lower() != ".mp4":
+            raise HTTPException(404, "not found")
+
+        cache_key = hashlib.sha256(rel_path.encode()).hexdigest()
+        _THUMB_CACHE.mkdir(parents=True, exist_ok=True)
+        thumb_path = _THUMB_CACHE / f"{cache_key}.jpg"
+
+        if not thumb_path.exists():
+            result = subprocess.run(
+                [
+                    "ffmpeg", "-ss", "1", "-i", str(target),
+                    "-vframes", "1", "-vf", "scale=320:-1",
+                    "-q:v", "5", "-f", "image2", str(thumb_path), "-y",
+                ],
+                capture_output=True,
+                timeout=20,
+            )
+            if result.returncode != 0 or not thumb_path.exists():
+                raise HTTPException(404, "thumbnail generation failed")
+
+        return FileResponse(
+            thumb_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
 
     return app

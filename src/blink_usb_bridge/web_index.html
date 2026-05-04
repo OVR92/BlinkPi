@@ -106,7 +106,7 @@
   }
   .clip:hover { border-color: var(--fg-3); }
   .clip:active { transform: scale(0.98); }
-  .clip video {
+  .clip img.thumb {
     width: 100%; height: 100%;
     object-fit: cover;
     display: block;
@@ -275,6 +275,8 @@
 <script>
 const PAGE_SIZE = 24;
 
+let thumbObserver = null;
+
 const state = {
   clips: [],
   cameraFilter: "all",
@@ -401,8 +403,8 @@ function render() {
   $("#empty").style.display = "none";
 
   grid.innerHTML = pageClips.map((c, i) => `
-    <div class="clip" data-i="${i}" data-src="/clip/${encodeURI(c.rel_path)}">
-      <video muted preload="none" playsinline></video>
+    <div class="clip" data-i="${i}">
+      <img class="thumb" data-src="/thumbnail/${encodeURI(c.rel_path)}" alt="">
       <div class="play">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
       </div>
@@ -411,20 +413,21 @@ function render() {
     </div>
   `).join("");
 
-  grid.querySelectorAll(".clip").forEach(el => {
-    const video = el.querySelector("video");
-    const src = el.dataset.src;
-
-    // Lazy thumbnail: fetch only on hover, only once
-    el.addEventListener("mouseenter", () => {
-      if (!video.src) {
-        video.src = src;
-        video.addEventListener("loadedmetadata", () => {
-          video.currentTime = Math.min(2, video.duration * 0.1);
-        }, { once: true });
+  if (thumbObserver) thumbObserver.disconnect();
+  thumbObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const img = entry.target.querySelector("img.thumb");
+      if (img && img.dataset.src) {
+        img.src = img.dataset.src;
+        delete img.dataset.src;
       }
-    }, { passive: true });
+      thumbObserver.unobserve(entry.target);
+    });
+  }, { rootMargin: "200px" });
 
+  grid.querySelectorAll(".clip").forEach(el => {
+    thumbObserver.observe(el);
     el.addEventListener("click", () => openModal(pageClips[parseInt(el.dataset.i, 10)]));
   });
 

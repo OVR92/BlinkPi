@@ -25,7 +25,7 @@ You get full local clip access, all your motion footage at any retention you wan
 
 ```
 ┌─────────────────┐  USB cable      ┌──────────────┐
-│ Sync Module 2   │◀────────────────│ Raspberry Pi │
+│ Sync Module 2   │────────────────>│ Raspberry Pi │
 │ (sees a USB     │                 │ (presents    │
 │  flash drive)   │                 │  itself as   │
 └─────────────────┘                 │  USB drive)  │

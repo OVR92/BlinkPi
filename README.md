@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Automatically save every Blink motion clip to your local network or cloud — no subscription required.</strong>
+  <strong>Automatically save every Blink motion clip to your local network or cloud - no subscription required!</strong>
 </p>
 
 <p align="center">
@@ -13,15 +13,11 @@
   <img src="https://img.shields.io/badge/polling-30s-green" alt="30s polling">
 </p>
 
-> ⚠️ **Beta:** Most code is AI-assisted. Work's well for me, but not yet fully vetted — please report issues.
-
----
-
-A Raspberry Pi Zero 2 W plugs into your Sync Module 2's USB port and pretends to be a USB flash drive. The SM2 happily writes motion clips to it. Every 30 seconds, the Pi reads the same backing file, finds new clips, validates them, and pushes them to your SMB share, rclone remote (Google Drive, S3, Dropbox, …), or both. There's also an optional local web UI to browse and play clips instantly on your network.
-
----
+<p align="center"> ⚠️ Beta: Code was created with AI. Tested by me, but not fully vetted, please report issues.</p>
 
 ## How it works
+
+A Raspberry Pi Zero 2 W plugs into your Sync Module 2's USB port and pretends to be a USB flash drive. The SM2 happily writes motion clips to it. Every 30 seconds, the Pi reads the same backing file, finds new clips, validates them, and pushes them to your SMB share, rclone remote (Google Drive, S3, Dropbox, …), or both. There's also an optional local web UI to browse and play clips instantly on your network.
 
 ![Physical setup](https://github.com/user-attachments/assets/0c2d01e4-f27c-4e7d-891c-478362e2072e)
 
@@ -184,7 +180,7 @@ Still stuck? Open an issue with your Pi model + OS, `config.yaml` (credentials r
 
 ## Home Assistant
 
-Point HA's network storage at the same SMB share the Pi pushes to and browse clips through the Media browser. See [`examples/home-assistant-gallery-card.yaml`](examples/home-assistant-gallery-card.yaml) for a one-line example.
+Point HA's network storage at the same SMB share the Pi pushes to and browse clips through the Media browser or using a "gallery card". See [`examples/home-assistant-gallery-card.yaml`](examples/home-assistant-gallery-card.yaml) for a one-line example.
 
 ---
 

@@ -1,4 +1,5 @@
 # BlinkPi
+<img width="1292" height="708" alt="image" src="https://github.com/user-attachments/assets/9d6b10fa-8b08-4025-b13c-bfc5dfd43e3f" />
 
 **Relay Blink Sync Module 2 motion clips off the device, automatically, with no Blink subscription required.**
 
@@ -11,7 +12,7 @@ You get full local clip access, all your motion footage at any retention you wan
 - **Local copies of every motion clip**, automatically, within ~30 seconds of recording
 - **No Blink subscription needed** for cloud backup
 - **Pluggable destinations** — I'm pushing clips to a local SMB server for long term retention and keeping one weeks worth of clips on google drive. Other services like Amazon S3 or box should work fine too but I havent tested those.
-- **Optional local web UI** at `http://blinkpi.local:8080` — browse and play clips on the Pi itself, no external service required
+- **Optional local web UI** at `http://blinkpi.local:8080` — browse and play clips straight from the Pi itself, no external service required and no roundtrip to amazons servers so clips load almost instantly!
 - **Nightly cleanup** with configurable retention (delete everything, or keep N days as a buffer)
 - **Clean filenames** — `2026-04-27_21-38-40_garage.mp4` — sortable, human-readable
 

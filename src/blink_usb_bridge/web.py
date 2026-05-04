@@ -127,7 +127,7 @@ def _list_clips(c: cfg.Config) -> list[dict]:
 
 def make_app(c: cfg.Config):
     """Build the FastAPI app with the given config bound."""
-    from fastapi import FastAPI, HTTPException, Request
+    from fastapi import FastAPI, HTTPException
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
     app = FastAPI(title="blink-usb-bridge", version="0.1.0")
@@ -175,7 +175,7 @@ def make_app(c: cfg.Config):
         })
 
     @app.get("/clip/{rel_path:path}")
-    def serve_clip(rel_path: str, request: Request):
+    def serve_clip(rel_path: str):
         if not _ensure_mounted(c):
             raise HTTPException(503, "backing image not mounted")
         if sm2.is_skippable(rel_path):

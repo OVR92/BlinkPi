@@ -17,7 +17,7 @@
 
 ## How it works
 
-A Raspberry Pi Zero 2 W plugs into your Sync Module 2's USB port and pretends to be a USB flash drive. The SM2 happily writes motion clips to it. Every 30 seconds, the Pi reads the same backing file, finds new clips, validates them, and pushes them to your SMB share, rclone remote (Google Drive, S3, Dropbox, …), or both. There's also an optional local web UI to browse and play clips instantly on your network.
+A Raspberry Pi Zero 2 W plugs into your Sync Module 2's (SM2) USB port and pretends to be a USB flash drive. The SM2 happily writes motion clips to it. Every 30 seconds, the Pi reads the same backing file, finds new clips, validates them, and pushes them to your SMB share, rclone remote (Google Drive, S3, Dropbox, …), or both. There's also an optional local web UI to browse and play clips instantly on your home network.
 
 ![Physical setup](https://github.com/user-attachments/assets/0c2d01e4-f27c-4e7d-891c-478362e2072e)
 
@@ -25,7 +25,7 @@ The Pi uses Linux's `g_mass_storage` gadget to present a backing image file as a
 
 The SM2 has no idea anything unusual is happening — from its perspective it's a normal USB flash drive.
 
-> **Note on cloud dependency:** Blink cameras may require an active connection to
+> **Note on cloud dependency:** Blink cameras require an active connection to
 > Blink's servers to function, and clips may travel via the cloud before reaching
 > the Sync Module (depending on model). BlinkPi only handles clips *after* they land on local storage,
 > it does not bypass any cloud capture pipelines.

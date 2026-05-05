@@ -57,7 +57,7 @@ The SM2 has no idea anything unusual is happening — from its perspective it's 
 | **USB cable** | USB-A to Micro-USB, **data capable**. Connect to the Pi's **USB port** (middle, labeled "USB") — not PWR. Consider snipping the power wires if powering the Pi and SM2 separately. |
 | **SD card** | 16 GB recommended (quality brand — it'll see heavy writes) |
 
-> ⚠️ Only works with **Sync Module 2 models that have a USB port**. Newer SM2s with SD card slots are not compatible.
+> ⚠️ Only works with **Sync Module models that have a USB port**. Newer Sync Modules with SD card slots are not compatible.
 
 ---
 
@@ -104,7 +104,7 @@ Required to activate the `dwc2` USB gadget overlay.
 
 **6. Plug into the SM2's USB port**
 
-Once plugged in, open the **Blink app** on your phone. Tap your **Sync Module 2 → Local Storage**. You should see a prompt to format the new USB drive — tap **Format** and confirm. The SM2 will format the Pi's virtual drive and begin writing clips to it automatically.
+Once plugged in, open the **Blink app** on your phone. Tap your **Sync Module 2 → Local Storage**. You should see a prompt to format the new USB drive — tap **Format** and confirm. The SM2 will format the Pi's virtual drive and begin writing clips to it.
 
 **7. Trigger a test clip**
 
@@ -113,6 +113,7 @@ Walk past a camera, wait ~30 seconds, then watch:
 ```bash
 journalctl -u blink-sync.service -f
 ```
+Or if you enabled the local webserver in config, go to http://blinkpi.local:8080 and watch for the clip to appear.
 
 ---
 

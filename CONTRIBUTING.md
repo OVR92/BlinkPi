@@ -4,10 +4,10 @@ Thanks for taking a look. This started as a personal project that turned out use
 
 ## Useful contributions
 
-- **A new destination plugin** (S3, MQTT, an HTTP webhook, etc). See [docs/ARCHITECTURE.md#destinations](docs/ARCHITECTURE.md#destinations) for the pattern. ~50 lines of code per destination.
-- **Confirmation that this works on a different SM2 firmware version**, or notes about layout differences if it doesn't. The SM2 filesystem details in [docs/SM2_FILESYSTEM.md](docs/SM2_FILESYSTEM.md) were figured out empirically against one specific firmware.
-- **Improvements to the docs** — especially "I tried this and got stuck on X" stories that could go into [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
-- **Tests.** This project doesn't have any yet because everything depends on hardware and a running SM2. PRs that mock those interfaces would be valuable.
+The biggest gap right now is accessibility — the setup process requires SSH and manual config file editing, which is a barrier for most users. Contributions that close that gap are most welcome:
+
+- **A GUI config page served at `blinkpi.local`** — a web interface for editing `config.yaml` without SSH. Ideally covers all fields (credentials, destinations, schedule) with validation and a save button that restarts the service.
+- **A pre-built SD card image** — package the project so it can be written straight to an SD card and boot into a working state with no SSH required. Something like Pi Imager compatibility with first-boot Wi-Fi and credential prompts would make this accessible to non-technical users.
 
 ## Issues
 

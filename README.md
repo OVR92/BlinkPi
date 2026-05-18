@@ -17,7 +17,6 @@
   <img src="https://img.shields.io/badge/polling-30s-green" alt="30s polling">
 </p>
 
-<p align="center"> ⚠️ Beta: Code was created with AI. Tested by me, but not fully vetted, please report issues.</p>
 
 ## How it works
 

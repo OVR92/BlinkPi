@@ -7,6 +7,10 @@
 </p>
 
 <p align="center">
+  ⚠️ <strong>Requires no active Blink subscription.</strong> See <a href="#subscription-compatibility">Subscription compatibility</a> below.
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/status-beta-orange" alt="Beta">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
   <img src="https://img.shields.io/badge/hardware-Pi%20Zero%202%20W-red" alt="Pi Zero 2 W">
@@ -37,7 +41,7 @@ The SM2 has no idea anything unusual is happening — from its perspective it's 
 | | |
 |---|---|
 | 📁 **Automatic backup** | Every motion clip lands on your NAS or cloud within ~30 seconds. No manual downloads. |
-| 🚫 **No subscription needed** | Works entirely off the SM2's free local USB storage feature. |
+| 🚫 **No subscription needed** | Works entirely off the SM2's free local USB storage feature. **Requires no active Blink subscription** — see below. |
 | 🌐 **Local web UI** | Browse and play clips at `http://blinkpi.local:8080` — instant loads, no cloud roundtrip. |
 | 🗂️ **Clean filenames** | Clips renamed to `2026-04-27_21-38-40_garage.mp4` — sortable and human-readable. |
 | 🔌 **Pluggable destinations** | SMB and rclone built in. Adding a new destination is ~50 lines of Python. |
@@ -45,6 +49,22 @@ The SM2 has no idea anything unusual is happening — from its perspective it's 
 
 ![Local web UI](https://github.com/user-attachments/assets/2fd18bc7-afb9-43bf-976e-e67ab414354e)
 
+
+---
+
+## Subscription compatibility
+
+**BlinkPi only works on accounts without an active Blink subscription plan.**
+
+When no subscription is active, the SM2 writes each motion clip directly to the USB drive as it is recorded — BlinkPi's 30-second polling loop picks these up in near-real time.
+
+When a subscription *is* active, Blink enables "Clip Backup" and changes the local storage behavior: instead of writing clips continuously, the SM2 performs a **once-daily batch backup** of clips from your cloud storage to the USB drive. Backed-up clips are also written to a **different path** (`blink_backup/` instead of `blink/`), which the current BlinkPi code explicitly skips — so no clips would be detected at all regardless of timing.
+
+If you have a subscription, you have two options:
+
+- **Drop the subscription:** Cancel or let it lapse, then re-format the USB drive from the Blink app. BlinkPi will work as normal. See [Blink's Clip Backup support article](https://support.blinkforhome.com/en_US/video-clips/how-do-i-use-clip-backup) for details.
+- **Keep the subscription and patch the code:** [@bagofgag](https://github.com/bagofgag) worked out how to modify `sm2.py` to also walk the `blink_backup/` directory — see [issue #1](https://github.com/OVR92/BlinkPi/issues/1) for the details. Note you'll only get clips once a day in this mode.
+- **Use the Blink API instead:** The [blinkpy](https://github.com/fronzbot/blinkpy) project can fetch clips directly from Blink's cloud via API calls, which is a better fit if you have a subscription and want near-real-time access.
 
 ---
 

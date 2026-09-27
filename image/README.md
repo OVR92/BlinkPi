@@ -53,8 +53,8 @@ cd BlinkPi
 WPA_COUNTRY=DE ./image/build.sh  # preset the Wi-Fi regulatory domain
 ```
 
-The build uses [pi-gen](https://github.com/RPi-Distro/pi-gen) (bookworm-arm64
-branch) with one extra stage, `image/stage-blinkpi`, which:
+The build uses [pi-gen](https://github.com/RPi-Distro/pi-gen) (arm64
+branch, Raspberry Pi OS trixie) with one extra stage, `image/stage-blinkpi`, which:
 
 - installs the apt dependencies (`00-packages/00-packages`)
 - copies the project to `/home/blink/BlinkPi` and creates its venv

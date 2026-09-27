@@ -1,6 +1,6 @@
 """Thin wrapper around NetworkManager's nmcli for the setup page.
 
-Raspberry Pi OS Bookworm ships NetworkManager, which gives us Wi-Fi
+Raspberry Pi OS (Bookworm and later) ships NetworkManager, which gives us Wi-Fi
 scanning, a WPA2 hotspot with built-in DHCP/DNS (dnsmasq in "shared"
 mode), and persistent connection profiles - all from one CLI. Nothing
 here is BlinkPi-specific except the profile names.

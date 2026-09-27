@@ -2,7 +2,7 @@
 #
 # build.sh — build a ready-to-flash BlinkPi SD card image with pi-gen.
 #
-# Produces Raspberry Pi OS Lite (64-bit, Bookworm) with BlinkPi
+# Produces Raspberry Pi OS Lite (64-bit, Trixie) with BlinkPi
 # pre-installed, the USB gadget overlay enabled, and the setup page
 # (bub-setup) running on port 80. On first boot with no network the Pi
 # raises the "BlinkPi-Setup" hotspot; see image/README.md.
@@ -24,9 +24,10 @@ PROJECT_DIR="$(cd "$HERE/.." && pwd)"
 WORK="${WORK:-$HERE/work}"
 PIGEN_DIR="$WORK/pi-gen"
 PIGEN_REPO="${PIGEN_REPO:-https://github.com/RPi-Distro/pi-gen.git}"
-# pi-gen's "arm64" branch moved to trixie; bookworm 64-bit now lives on
-# "bookworm-arm64". Keep this in sync with RELEASE in the config below.
-PIGEN_BRANCH="${PIGEN_BRANCH:-bookworm-arm64}"
+# pi-gen's "arm64" branch builds 64-bit trixie; 64-bit bookworm lives on
+# "bookworm-arm64". Keep PIGEN_BRANCH and RELEASE in sync.
+PIGEN_BRANCH="${PIGEN_BRANCH:-arm64}"
+RELEASE="${RELEASE:-trixie}"
 USE_DOCKER="${USE_DOCKER:-1}"
 WPA_COUNTRY="${WPA_COUNTRY:-}"
 IMG_NAME="${IMG_NAME:-BlinkPi}"
@@ -34,6 +35,17 @@ IMG_NAME="${IMG_NAME:-BlinkPi}"
 log() { printf "\033[1;34m[image]\033[0m %s\n" "$*"; }
 
 mkdir -p "$WORK"
+# Switching pi-gen branch (e.g. bookworm -> trixie): start from scratch.
+# The old clone won't change branch on `git pull`, and with CONTINUE=1 the
+# preserved docker container would reuse the previous release's rootfs.
+if [[ -d "$PIGEN_DIR/.git" ]] && \
+   [[ "$(git -C "$PIGEN_DIR" rev-parse --abbrev-ref HEAD)" != "$PIGEN_BRANCH" ]]; then
+    log "pi-gen branch changed to $PIGEN_BRANCH; discarding old clone and build container"
+    if [[ "$USE_DOCKER" == "1" ]]; then
+        docker rm -v pigen_work >/dev/null 2>&1 || true
+    fi
+    rm -rf "$PIGEN_DIR"
+fi
 if [[ ! -d "$PIGEN_DIR/.git" ]]; then
     log "cloning pi-gen ($PIGEN_BRANCH)"
     git clone --depth 1 --branch "$PIGEN_BRANCH" "$PIGEN_REPO" "$PIGEN_DIR"
@@ -71,7 +83,7 @@ touch "$PIGEN_DIR/stage2/SKIP_IMAGES"
 log "writing pi-gen config"
 cat > "$PIGEN_DIR/config" <<EOF
 IMG_NAME="$IMG_NAME"
-RELEASE=bookworm
+RELEASE=$RELEASE
 DEPLOY_COMPRESSION=xz
 TARGET_HOSTNAME=blinkpi
 FIRST_USER_NAME=blink

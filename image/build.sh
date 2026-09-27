@@ -24,7 +24,9 @@ PROJECT_DIR="$(cd "$HERE/.." && pwd)"
 WORK="${WORK:-$HERE/work}"
 PIGEN_DIR="$WORK/pi-gen"
 PIGEN_REPO="${PIGEN_REPO:-https://github.com/RPi-Distro/pi-gen.git}"
-PIGEN_BRANCH="${PIGEN_BRANCH:-arm64}"
+# pi-gen's "arm64" branch moved to trixie; bookworm 64-bit now lives on
+# "bookworm-arm64". Keep this in sync with RELEASE in the config below.
+PIGEN_BRANCH="${PIGEN_BRANCH:-bookworm-arm64}"
 USE_DOCKER="${USE_DOCKER:-1}"
 WPA_COUNTRY="${WPA_COUNTRY:-}"
 IMG_NAME="${IMG_NAME:-BlinkPi}"

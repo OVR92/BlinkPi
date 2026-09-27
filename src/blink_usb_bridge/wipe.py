@@ -8,8 +8,10 @@ the Blink mobile app for human confirmation to format. Reformatting
 nightly would mean a confirmation prompt every morning.
 
 Instead we:
+  0. Pause the periodic sync timer so nothing races us
   1. Take the gadget offline (SM2 sees device disconnect)
-  2. Mount the same exFAT filesystem read-write
+  2. Mount the same exFAT filesystem read-write (at its own mount point,
+     never the sync service's)
   3. Either delete all YY-MM/ subtrees, OR keep the most recent N days
      and delete only older clips, depending on wipe.retention_days.
      In all modes we preserve:
@@ -17,7 +19,9 @@ Instead we:
         /blink/.tmp/             — staging area
         /blink_backup/           — paid Clip Backup feature
   4. Unmount cleanly
-  5. Bring the gadget back up
+  5. Bring the gadget back up - unconditionally, in a finally block. If the
+     gadget stays down the SM2 reports "no USB drive" until reboot.
+  6. Resume the sync timer
 
 The SM2 sees the same drive (same UUID, same skeleton) come back online
 and resumes recording without any human interaction.
@@ -50,17 +54,52 @@ log = logging.getLogger(__name__)
 
 GADGET_SERVICE = "blink-gadget.service"
 SYNC_SERVICE = "blink-sync.service"
+SYNC_TIMER = "blink-sync.timer"
 
 
 def _systemctl(*args: str) -> int:
     return subprocess.run(["systemctl", *args]).returncode
 
 
-def _ensure_unmounted(mount_point: Path) -> None:
-    if subprocess.run(
+def _unit_exists(unit: str) -> bool:
+    """True if systemd knows about the unit (loaded or on disk)."""
+    r = subprocess.run(
+        ["systemctl", "list-unit-files", "--no-legend", unit],
+        capture_output=True, text=True,
+    )
+    return r.returncode == 0 and unit in r.stdout
+
+
+def _is_mounted(mount_point: Path) -> bool:
+    return subprocess.run(
         ["mountpoint", "-q", str(mount_point)],
-    ).returncode == 0:
-        subprocess.run(["umount", str(mount_point)], capture_output=True)
+    ).returncode == 0
+
+
+def _ensure_unmounted(mount_point: Path) -> None:
+    if _is_mounted(mount_point):
+        r = subprocess.run(["umount", str(mount_point)], capture_output=True, text=True)
+        if r.returncode != 0:
+            log.warning("umount %s failed: %s", mount_point, r.stderr.strip())
+
+
+def wipe_mount_point(c: cfg.Config) -> Path:
+    """Where the wipe mounts the image read-write.
+
+    Deliberately NOT the sync service's mount_point. Earlier versions shared
+    it, and a sync run that fired mid-wipe would find the wipe's RW mount
+    already present, walk it, and then unmount it from under the wipe.
+    """
+    return c.mount_point.with_name(c.mount_point.name + "_wipe")
+
+
+def _restart_gadget() -> None:
+    log.info("starting %s", GADGET_SERVICE)
+    if _systemctl("start", GADGET_SERVICE) != 0:
+        log.error(
+            "%s failed to start - the SM2 will report no USB drive until it is started",
+            GADGET_SERVICE,
+        )
 
 
 def run(c: cfg.Config) -> int:
@@ -72,33 +111,77 @@ def run(c: cfg.Config) -> int:
         log.error("backing image missing at %s", c.backing_image_path)
         return 1
 
+    # Pause the periodic sync for the duration of the wipe. A sync that
+    # starts while the gadget is down and the image is mounted RW would
+    # (a) see a half-deleted filesystem and (b) previously unmounted our
+    # RW mount from under us, crashing the wipe before the gadget came
+    # back up. The timer is restarted in the finally block below.
+    timer_paused = False
+    if _unit_exists(SYNC_TIMER):
+        log.info("pausing %s", SYNC_TIMER)
+        timer_paused = _systemctl("stop", SYNC_TIMER) == 0
+        if not timer_paused:
+            log.warning("could not stop %s; continuing", SYNC_TIMER)
+
+    try:
+        return _wipe(c)
+    finally:
+        if timer_paused:
+            log.info("resuming %s", SYNC_TIMER)
+            _systemctl("start", SYNC_TIMER)
+
+
+def _wipe(c: cfg.Config) -> int:
     # Best-effort final sync; losing one cycle is better than skipping the
-    # wipe entirely if sync transiently fails.
+    # wipe entirely if sync transiently fails. `systemctl start` blocks
+    # until the oneshot completes, and serialises with an in-flight run.
     log.info("running pre-wipe sync")
     if _systemctl("start", SYNC_SERVICE) != 0:
         log.warning("pre-wipe sync failed; continuing anyway")
 
     log.info("stopping %s", GADGET_SERVICE)
-    _systemctl("stop", GADGET_SERVICE)
-    # Give the SM2 a moment to register the disconnect.
-    subprocess.run(["sleep", "5"])
+    if _systemctl("stop", GADGET_SERVICE) != 0:
+        # Never touch the image RW while the SM2 may still be writing to
+        # it through the gadget - that corrupts the exFAT filesystem.
+        log.error("could not stop %s; aborting wipe without touching the image", GADGET_SERVICE)
+        _restart_gadget()
+        return 1
 
-    log.info("mounting backing image RW at %s", c.mount_point)
-    c.mount_point.mkdir(parents=True, exist_ok=True)
+    # Everything from here on runs with the gadget down. Whatever happens -
+    # mount failure, an exception mid-delete, an early return - the gadget
+    # MUST come back up, so the restart lives in a finally block.
+    try:
+        # Give the SM2 a moment to register the disconnect.
+        subprocess.run(["sleep", "5"])
+        return _wipe_with_gadget_down(c)
+    finally:
+        _restart_gadget()
+        if c.web.enabled:
+            # The web UI holds its own RO loop mount of the image; its exFAT
+            # metadata is now stale. Drop it so the UI remounts lazily.
+            _ensure_unmounted(c.web.mount_point)
+
+
+def _wipe_with_gadget_down(c: cfg.Config) -> int:
+    mnt = wipe_mount_point(c)
+    _ensure_unmounted(mnt)
+    log.info("mounting backing image RW at %s", mnt)
+    mnt.mkdir(parents=True, exist_ok=True)
     mount_cmd = [
         "mount",
         "-o", f"loop,offset={sm2.partition_offset(c.backing_image_path)}",
-        str(c.backing_image_path), str(c.mount_point),
+        str(c.backing_image_path), str(mnt),
     ]
-    if subprocess.run(mount_cmd).returncode != 0:
-        log.error("mount failed; restarting gadget and aborting")
-        _systemctl("start", GADGET_SERVICE)
+    r = subprocess.run(mount_cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        log.error("mount failed: %s; aborting", r.stderr.strip())
         return 1
 
+    survivors: set[str] = set()
     try:
-        clips_dir = c.mount_point / sm2.CLIPS_ROOT
+        clips_dir = mnt / sm2.CLIPS_ROOT
         if not clips_dir.exists():
-            log.warning("%s missing — SM2 may not have formatted yet", clips_dir)
+            log.warning("%s missing - SM2 may not have formatted yet", clips_dir)
             return 0
 
         if c.wipe.retention_days == 0:
@@ -117,59 +200,86 @@ def run(c: cfg.Config) -> int:
         for required in (
             clips_dir,
             clips_dir / ".tmp",
-            c.mount_point / "blink_backup",
+            mnt / "blink_backup",
         ):
             if not required.exists():
                 log.warning("expected directory missing after wipe: %s", required)
 
-        removed = _prune_thumbnails(c)
+        survivors = _surviving_clips(mnt)
+        removed = _prune_thumbnails(c, survivors)
         if removed:
             log.info("pruned %d stale thumbnails", removed)
 
         subprocess.run(["sync"])
     finally:
-        log.info("unmounting %s", c.mount_point)
-        _ensure_unmounted(c.mount_point)
+        log.info("unmounting %s", mnt)
+        _ensure_unmounted(mnt)
 
-    log.info("starting %s", GADGET_SERVICE)
-    _systemctl("start", GADGET_SERVICE)
-
-    # State referenced post-wipe clips that no longer exist; reset so we
-    # don't keep them around as stale entries.
-    log.info("resetting sync state")
-    if c.state_file.exists():
-        c.state_file.write_text('{}')
-        # Best-effort chown to the user the sync service runs as.
-        try:
-            import pwd
-            uid = pwd.getpwnam(c.pi_user).pw_uid
-            os.chown(c.state_file, uid, -1)
-        except (KeyError, PermissionError) as e:
-            log.warning("could not chown state file: %s", e)
-
+    _prune_state(c, survivors)
     log.info("wipe complete")
     return 0
 
 
-def _prune_thumbnails(c: cfg.Config) -> int:
-    """Remove thumbnails for clips that no longer exist on the backing image.
+def _surviving_clips(mnt: Path) -> set[str]:
+    """Relative paths of every clip still on the image after the wipe."""
+    alive: set[str] = set()
+    clips_dir = mnt / sm2.CLIPS_ROOT
+    if not clips_dir.exists():
+        return alive
+    for p in clips_dir.rglob("*.mp4"):
+        if not p.is_file():
+            continue
+        rel = str(p.relative_to(mnt))
+        if sm2.is_skippable(rel):
+            continue
+        alive.add(rel)
+    return alive
 
-    Called while the image is still mounted RW so we can enumerate survivors.
+
+def _prune_state(c: cfg.Config, survivors: set[str]) -> None:
+    """Drop sync-state entries for clips that no longer exist on the image.
+
+    Earlier versions reset the whole state file, which with retention_days > 0
+    made every surviving clip get re-validated and re-pushed the next morning.
+    State keys are "rel_path|size|mtime_ns" (see sync.ClipKey).
     """
+    import json
+
+    if not c.state_file.exists():
+        return
+    try:
+        data = json.loads(c.state_file.read_text() or "{}")
+    except (json.JSONDecodeError, OSError) as e:
+        log.warning("could not read state file (%s); leaving it alone", e)
+        return
+    if not isinstance(data, dict):
+        return
+
+    before = sum(len(v) for v in data.values() if isinstance(v, list))
+    pruned = {
+        dest: [k for k in keys if k.rsplit("|", 2)[0] in survivors]
+        for dest, keys in data.items()
+        if isinstance(keys, list)
+    }
+    after = sum(len(v) for v in pruned.values())
+    tmp = c.state_file.with_suffix(".tmp")
+    tmp.write_text(json.dumps(pruned, indent=2))
+    tmp.replace(c.state_file)
+    log.info("pruned sync state: %d -> %d entries", before, after)
+    # Best-effort chown to the user the sync service runs as.
+    try:
+        import pwd
+        uid = pwd.getpwnam(c.pi_user).pw_uid
+        os.chown(c.state_file, uid, -1)
+    except (ImportError, KeyError, PermissionError) as e:
+        log.warning("could not chown state file: %s", e)
+
+
+def _prune_thumbnails(c: cfg.Config, survivors: set[str]) -> int:
+    """Remove thumbnails for clips that no longer exist on the backing image."""
     if not c.thumbnail_dir.exists():
         return 0
-
-    clips_dir = c.mount_point / sm2.CLIPS_ROOT
-    alive: set[str] = set()
-    if clips_dir.exists():
-        for p in clips_dir.rglob("*.mp4"):
-            if not p.is_file():
-                continue
-            rel = str(p.relative_to(c.mount_point))
-            if sm2.is_skippable(rel):
-                continue
-            alive.add(hashlib.sha256(rel.encode()).hexdigest())
-
+    alive = {hashlib.sha256(rel.encode()).hexdigest() for rel in survivors}
     removed = 0
     for thumb in c.thumbnail_dir.glob("*.jpg"):
         if thumb.stem not in alive:

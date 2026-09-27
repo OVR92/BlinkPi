@@ -39,3 +39,13 @@ venv/
 *.swp
 *.swo
 .DS_Store
+
+# Setup page state (admin password hash) and image build outputs
+setup_state.json
+image/work/
+image/deploy/
+
+# Secrets, AI analysis cache, watchdog state
+secrets.yaml
+analysis/
+health_state.json

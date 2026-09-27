@@ -1,0 +1,41 @@
+# Home Assistant automation: analyse each new BlinkPi clip with LLM Vision.
+#
+# Prerequisites
+#   - LLM Vision installed via HACS and a provider configured: https://llmvision.org
+#   - The BlinkPi SMB share added in HA as network storage (Settings -> System ->
+#     Storage), so the clip file is reachable from HA. Adjust `video_file` to
+#     where the share is mounted inside HA (e.g. /media/blinkStorage/...).
+#   - On the BlinkPi setup page, Alerts & AI -> Webhook:
+#       URL: http://<homeassistant>:8123/api/webhook/blinkpi
+#       "Send every new clip" enabled.
+#
+# The webhook payload fields used below: camera, filename, smb_relative_path.
+# Check the LLM Vision docs for the exact action parameters of your version;
+# the names below match the documented `llmvision.video_analyzer` action.
+
+alias: BlinkPi clip -> LLM Vision
+mode: queued
+trigger:
+  - platform: webhook
+    webhook_id: blinkpi
+    allowed_methods: [POST]
+    local_only: true
+condition:
+  - condition: template
+    value_template: "{{ trigger.json.event == 'new_clip' }}"
+action:
+  - action: llmvision.video_analyzer
+    data:
+      provider: !input provider              # or the provider entry id from LLM Vision
+      video_file: "/media/blinkStorage/{{ trigger.json.smb_relative_path }}"
+      max_frames: 4
+      message: >-
+        This is a motion clip from the camera "{{ trigger.json.camera }}".
+        Describe in two sentences what happens and whether a person or vehicle is present.
+      include_filename: false
+      target_width: 768
+    response_variable: analysis
+  - action: notify.mobile_app_your_phone
+    data:
+      title: "Blink: {{ trigger.json.camera }}"
+      message: "{{ analysis.response_text }}"

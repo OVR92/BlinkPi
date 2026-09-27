@@ -45,6 +45,8 @@ The SM2 has no idea anything unusual is happening — from its perspective it's 
 | 🗂️ **Clean filenames** | Clips renamed to `2026-04-27_21-38-40_garage.mp4` — sortable and human-readable. |
 | 🔌 **Pluggable destinations** | SMB and rclone built in. Adding a new destination is ~50 lines of Python. |
 | 🧹 **Nightly cleanup** | Automatically wipes the backing image without triggering the SM2's format prompt. |
+| 🔔 **Notifications** | Email or webhook for every clip, plus a watchdog that tells you when recording has stopped. |
+| 🤖 **AI summaries** | Optional: a vision model of your choice describes each clip ("A delivery driver leaves a parcel at the door"). |
 
 ![Local web UI](https://github.com/user-attachments/assets/2fd18bc7-afb9-43bf-976e-e67ab414354e)
 
@@ -80,7 +82,20 @@ If you have a subscription, you have two options:
 
 ---
 
-## Quick start
+## Quick start (SD card image)
+
+The easiest install: flash the prebuilt image, no SSH or YAML editing.
+
+1. Flash `BlinkPi-*.img.xz` (from the [releases page](https://github.com/OVR92/BlinkPi/releases), or build it yourself with `./image/build.sh`) using Raspberry Pi Imager.
+2. Boot the Pi Zero 2 W. After about a minute it broadcasts the Wi-Fi network **`BlinkPi-Setup`** (password `blinkpi123`). Join it from your phone; the setup page opens as a captive portal (or browse to http://10.42.0.1/).
+3. Pick your home Wi-Fi on the **Network** tab. Then rejoin your own network and open **http://blinkpi.local/**.
+4. Enable an SMB share and/or an rclone remote on the **Storage** / **Cloud** tabs and press **Apply**.
+5. Plug the Pi's **USB** port into the Sync Module and tap **Format** under *Sync Module → Local Storage* in the Blink app.
+6. Set an admin password on the **Settings** tab.
+
+See [image/README.md](image/README.md) for details and for building the image.
+
+## Quick start (manual install)
 
 **1. Flash & boot the Pi**
 
@@ -136,6 +151,48 @@ Or if you enabled the local webserver in config, go to http://blinkpi.local:8080
 
 ---
 
+## Setup & maintenance page
+
+Both install methods give you a web page at **http://blinkpi.local/** (port 80, runs as root) with:
+
+| Tab | What you can do |
+|---|---|
+| **Status** | Setup checklist, network, whether the SM2 has formatted the drive, service health, last sync |
+| **Network** | Scan and join Wi-Fi, set the country code, configure or disable the fallback hotspot |
+| **Storage** | SMB share (with a connection test), which rclone remote to use, retention on the Pi |
+| **Cloud** | Create rclone remotes without a terminal: Google Drive / Dropbox / Box / pCloud / OneDrive via token paste, S3, B2, SFTP, WebDAV, FTP, or a raw `rclone.conf` section. One-click test. |
+| **Settings** | Hostname, timezone, poll interval, clip browser on/off, admin password |
+| **Maintenance** | Sync now, run the nightly cleanup, re-plug the USB drive, update from git, reboot, view logs |
+
+**Fallback hotspot:** if the Pi has no IP address for 60 seconds it starts the `BlinkPi-Setup` access point so you can always reach this page. While the hotspot is up it retries your saved Wi-Fi every 5 minutes. Disable it under *Network* if you don't want that (e.g. wired installs).
+
+**Set an admin password.** Until you do, anyone on your LAN can open the page and it can reconfigure the Pi as root.
+
+## Notifications, watchdog and AI summaries
+
+All three are configured on the setup page's **Alerts & AI** tab (or under `notify:`, `watchdog:` and `ai:` in `config.yaml`; secrets go in `secrets.yaml`).
+
+**Email** uses any SMTP server (for Gmail: `smtp.gmail.com`, port 587, STARTTLS, an app password). **Webhook** POSTs a JSON document per event; the new-clip payload looks like:
+
+```json
+{"event": "new_clip", "camera": "garage", "filename": "2026-05-03_17-08-41_garage.mp4",
+ "timestamp": "2026-05-03T17:08:41-07:00", "duration": 12.0, "size_bytes": 1823311,
+ "smb_path": "/mnt/blink-share/garage/2026-05-03_17-08-41_garage.mp4",
+ "smb_relative_path": "garage/2026-05-03_17-08-41_garage.mp4",
+ "description": "A person walks up the driveway carrying a box ...", "alert": true, "tags": ["person", "delivery"]}
+```
+
+**Watchdog** runs after every sync pass and alerts (once, with reminders and a recovery message) when:
+- no clip has been recorded for `max_silence_hours` (outside optional quiet hours),
+- sync has failed `failures_before_alert` times in a row,
+- the USB gadget service is down, which is what the Sync Module reports as "no USB drive".
+
+**AI summaries** extract a few frames from each new clip with ffmpeg and ask a vision model to describe them. Any **OpenAI-compatible endpoint** works: OpenAI, OpenRouter, Groq, Google Gemini, or a local Ollama / LM Studio for free. Pick a service preset (or a custom base URL), press *Fetch* to list its models, and choose one that accepts images. Choose either N evenly spaced frames or one frame every N seconds, cap clips per hour, and restrict to specific cameras. Descriptions appear in the clip browser and in notifications. Small hosted vision models cost well under a cent per clip; a local model costs nothing.
+
+**Email as backup.** Setting the email option to *attach the clip itself* turns the mailbox into a simple off-site copy: every clip arrives as an attachment named like `2026-05-03_17-08-41_garage.mp4`, with the AI description in the body. It is a proper destination with its own retry state, so a failed send is retried on the next pass. Watch your provider's limits (Gmail: 25 MB per message, about 500 messages a day on personal accounts, 15 GB of storage).
+
+**Home Assistant + LLM Vision:** if you already run [LLM Vision](https://llmvision.org) in Home Assistant, you can skip the built-in AI and analyse the clips there with any provider LLM Vision supports. Point the BlinkPi webhook at an HA webhook trigger; the payload carries the clip's path on the SMB share. See [examples/home-assistant-llmvision-automation.yaml](examples/home-assistant-llmvision-automation.yaml).
+
 ## Configuration
 
 Everything lives in one `config.yaml`. Key fields:
@@ -190,6 +247,9 @@ Subclass it, add a config block in `config.example.yaml` and a dataclass in `con
 ---
 
 ## Troubleshooting
+
+**Sync Module says no USB drive is connected.** The USB gadget is down. Press *Re-plug USB drive* on the Maintenance tab (or `sudo systemctl start blink-gadget.service`). Versions before 0.2.0 could leave the gadget down if the nightly wipe hit an error; see the CHANGELOG.
+
 
 | Symptom | First thing to check |
 |---|---|

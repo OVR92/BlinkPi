@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blink-usb-bridge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Relay Blink Sync Module 2 motion clips to local or cloud storage via a Pi presenting USB mass storage."
 readme = "README.md"
 license = { text = "MIT" }
@@ -44,6 +44,7 @@ bub-sync = "blink_usb_bridge.sync:main"
 bub-wipe = "blink_usb_bridge.wipe:main"
 bub-prune = "blink_usb_bridge.prune:main"
 bub-web = "blink_usb_bridge.web:main"
+bub-setup = "blink_usb_bridge.setup_app:main"
 
 [project.urls]
 Homepage = "https://github.com/OVR92/BlinkPi"
@@ -57,4 +58,4 @@ line-length = 100
 target-version = "py311"
 
 [tool.setuptools.package-data]
-blink_usb_bridge = ["web_index.html"]
+blink_usb_bridge = ["web_index.html", "setup_index.html"]

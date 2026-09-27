@@ -50,6 +50,8 @@ class Destination(ABC):
             out.append(SmbDestination(c.smb))
         if c.rclone.enabled:
             out.append(RcloneDestination(c.rclone))
+        if c.notify.email.enabled and c.notify.email.on_new_clip == "clip":
+            out.append(EmailDestination(c))
         return out
 
 
@@ -143,3 +145,68 @@ class RcloneDestination(Destination):
             log.error("rclone: failed for %s: %s", marked, result.stderr.strip())
             return False
         return True
+
+
+# ───────────────────────────── email ──────────────────────────────
+
+class EmailDestination(Destination):
+    """Email each clip as an attachment - a zero-infrastructure off-site copy.
+
+    Enabled when notify.email.on_new_clip == "clip". Has its own sync state
+    like any destination, so a failed send is retried next pass. Clips over
+    max_attachment_mb are sent as a summary (thumbnail only) and counted as
+    delivered, since retrying would never help.
+    """
+
+    name = "email"
+
+    def __init__(self, c: cfg.Config):
+        self.c = c
+
+    def available(self) -> bool:
+        return bool(self.c.notify.email.host and self.c.notify.email.to)
+
+    def push(self, local_path: Path, target_filename: str, camera: str) -> bool:
+        from . import ai_vision
+        from .notify import send_email
+
+        em = self.c.notify.email
+        try:
+            rel = str(local_path.relative_to(self.c.mount_point))
+        except ValueError:
+            rel = local_path.name
+        size = local_path.stat().st_size if local_path.exists() else 0
+        analysis = ai_vision.load_analysis(self.c, rel) or {}
+        desc = analysis.get("description") or ""
+        stamp = target_filename[:-4].rsplit("_", 1)[0].replace("_", " ")  # "YYYY-MM-DD HH-MM-SS"
+
+        attachments: list[Path] = []
+        thumb = self.c.thumbnail_dir / (__import__("hashlib").sha256(rel.encode()).hexdigest() + ".jpg")
+        too_big = size > em.max_attachment_mb * 1024 * 1024
+        if too_big:
+            if thumb.exists():
+                attachments.append(thumb)
+            note = (f"\n\nThe clip ({size / 1e6:.1f} MB) exceeds the {em.max_attachment_mb:g} MB "
+                    "attachment limit, so only the thumbnail is attached.")
+        else:
+            attachments.append(local_path)
+            note = ""
+
+        subject = f"Blink clip: {camera} {stamp}" + (" (alert)" if analysis.get("alert") else "")
+        body = (desc + "\n\n" if desc else "") + (
+            f"Camera: {camera}\nClip: {target_filename}\nSize: {size / 1e6:.1f} MB{note}"
+        )
+        try:
+            ok, msg = send_email(
+                host=em.host, port=em.port, security=em.security, username=em.username,
+                password=self.c.secrets.get("smtp_password", ""), from_addr=em.from_addr,
+                to=em.to, subject=subject, body=body,
+                attachments=attachments if too_big else [(local_path, target_filename)],
+            )
+        except Exception as e:  # noqa: BLE001
+            ok, msg = False, f"{type(e).__name__}: {e}"
+        if ok:
+            log.info("email: sent %s (%.1f MB)", target_filename, size / 1e6)
+        else:
+            log.error("email: failed for %s: %s", target_filename, msg)
+        return ok

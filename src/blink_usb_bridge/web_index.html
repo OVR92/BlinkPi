@@ -134,6 +134,15 @@
     font-variant-numeric: tabular-nums;
     line-height: 1.3;
   }
+  .clip .desc {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; margin-top: 3px; font-size: 12px; color: rgba(255,255,255,0.85);
+    font-variant-numeric: normal;
+  }
+  .clip .alert-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #f87171; margin-right: 6px; vertical-align: 1px;
+  }
   .clip .cam {
     position: absolute; top: 10px; right: 10px;
     background: rgba(0,0,0,0.65);
@@ -409,7 +418,7 @@ function render() {
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
       </div>
       <div class="cam">${escapeHTML(c.camera)}</div>
-      <div class="meta">${fmtTime(c.timestamp)} · ${fmtSize(c.size_bytes)}</div>
+      <div class="meta">${c.alert ? '<span class="alert-dot"></span>' : ''}${fmtTime(c.timestamp)} · ${fmtSize(c.size_bytes)}${c.description ? `<div class="desc">${escapeHTML(c.description)}</div>` : ''}</div>
     </div>
   `).join("");
 
@@ -456,7 +465,7 @@ $("#next-btn").addEventListener("click", () => {
 
 function openModal(clip) {
   $("#modal-video").src = "/clip/" + encodeURI(clip.rel_path);
-  $("#modal-info").textContent = `${clip.camera} · ${fmtTime(clip.timestamp)}`;
+  $("#modal-info").textContent = `${clip.camera} · ${fmtTime(clip.timestamp)}` + (clip.description ? ` — ${clip.description}` : "");
   $("#modal").classList.add("open");
 }
 

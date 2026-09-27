@@ -1,0 +1,13 @@
+python3-venv
+python3-pip
+python3-yaml
+ffmpeg
+cifs-utils
+rclone
+git
+rsync
+avahi-daemon
+avahi-utils
+network-manager
+exfatprogs
+iw

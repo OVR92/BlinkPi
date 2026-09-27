@@ -160,6 +160,87 @@ web:
   mount_point: /home/pi/blink-usb-bridge/web_mount
 
 # ──────────────────────────────────────────────────────────────────────────
+# Notifications (email / webhook)
+# ──────────────────────────────────────────────────────────────────────────
+#
+# Secrets (SMTP password, AI API key) do NOT go here. They live in
+# secrets.yaml next to this file (mode 0600), written by the setup page:
+#   smtp_password: "..."
+#   ai_api_key: "sk-..."
+
+notify:
+  email:
+    enabled: false
+    host: smtp.gmail.com
+    port: 587
+    security: starttls        # starttls | ssl | none
+    username: you@gmail.com
+    from: you@gmail.com
+    to: [you@gmail.com]
+    # off      - only watchdog alerts
+    # summary  - one email per clip with the thumbnail and AI description
+    # clip     - one email per clip with the .mp4 attached: a zero-setup
+    #            off-site backup (mind mailbox size and daily send limits)
+    on_new_clip: off
+    max_attachment_mb: 20     # bigger clips are sent as a summary instead
+
+  # POST a JSON document per event. Payload for new clips includes camera,
+  # filename, path on the SMB share, AI description/alert/tags. Works as a
+  # Home Assistant webhook trigger - see examples/.
+  webhook:
+    enabled: false
+    url: http://homeassistant.local:8123/api/webhook/blinkpi
+    on_new_clip: true
+
+# ──────────────────────────────────────────────────────────────────────────
+# Watchdog - runs after every sync pass; alerts via the channels above
+# ──────────────────────────────────────────────────────────────────────────
+
+watchdog:
+  enabled: false
+  max_silence_hours: 24       # alert when no clip has been recorded for this long
+  remind_every_hours: 24      # repeat the silence alert at this interval
+  quiet_start: ""             # e.g. "23:00" - no silence alerts inside this window
+  quiet_end: ""               # e.g. "07:00"
+  alert_on_sync_failure: true # also alert when sync keeps failing or the USB gadget is down
+  failures_before_alert: 5    # consecutive failed passes before alerting
+
+# ──────────────────────────────────────────────────────────────────────────
+# AI clip summaries (any OpenAI-compatible vision model; frames via ffmpeg)
+# ──────────────────────────────────────────────────────────────────────────
+#
+# Works with OpenAI, OpenRouter, Groq, Google Gemini's OpenAI-compatible
+# endpoint, or a local Ollama / LM Studio (free). The API key, if the
+# service needs one, goes in secrets.yaml as `ai_api_key`.
+
+ai:
+  enabled: false
+  base_url: https://api.openai.com/v1   # e.g. https://openrouter.ai/api/v1, http://127.0.0.1:11434/v1
+  model: ""                   # a model id from the service that accepts images
+  frames: 4                   # evenly spaced frames per clip...
+  frame_interval_seconds: 0   # ...or one frame every N seconds (overrides `frames`)
+  max_per_hour: 20            # cost cap; 0 = unlimited
+  cameras: []                 # only analyse these cameras; empty = all
+  prompt: ""                  # custom prompt; {camera} {when} {frames} are substituted
+  in_notifications: true      # include the description in new-clip email/webhook
+
+# ──────────────────────────────────────────────────────────────────────────
+# Setup & maintenance page (bub-setup, runs as root on port 80)
+# ──────────────────────────────────────────────────────────────────────────
+
+setup:
+
+  # If the Pi has no network for ~60 s, broadcast a Wi-Fi hotspot with the
+  # setup page as a captive portal. Set to false on a wired-only install
+  # if you don't want the Pi to ever start an access point.
+  hotspot_enabled: true
+  hotspot_ssid: BlinkPi-Setup
+  hotspot_password: blinkpi123
+
+  listen_host: "0.0.0.0"
+  listen_port: 80
+
+# ──────────────────────────────────────────────────────────────────────────
 # Validation thresholds — most users never touch these
 # ──────────────────────────────────────────────────────────────────────────
 

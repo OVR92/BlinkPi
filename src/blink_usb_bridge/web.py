@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
+from . import ai_vision
 from . import config as cfg
 from . import sm2
 
@@ -111,6 +112,7 @@ def _list_clips(c: cfg.Config) -> list[dict]:
     if not clips_dir.exists():
         return []
 
+    have_analysis = c.analysis_dir.exists()
     out: list[dict] = []
     for p in clips_dir.rglob("*.mp4"):
         if not p.is_file():
@@ -129,6 +131,7 @@ def _list_clips(c: cfg.Config) -> list[dict]:
             continue
 
         local_ts = parsed.timestamp_utc.astimezone(tz)
+        analysis = ai_vision.load_analysis(c, rel) if have_analysis else None
         # The relative path is what the client uses to fetch the clip
         # via /clip/<rel>. We URL-quote it on the client side.
         out.append({
@@ -138,6 +141,9 @@ def _list_clips(c: cfg.Config) -> list[dict]:
             "timestamp": local_ts.isoformat(),
             "timestamp_unix": local_ts.timestamp(),
             "size_bytes": size,
+            "description": (analysis or {}).get("description") or None,
+            "alert": bool((analysis or {}).get("alert")),
+            "tags": (analysis or {}).get("tags") or [],
         })
 
     out.sort(key=lambda c: c["timestamp_unix"], reverse=True)

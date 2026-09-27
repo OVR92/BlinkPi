@@ -1,0 +1,8 @@
+
+  BlinkPi - Blink Sync Module clip bridge
+  ---------------------------------------
+  Setup / status page:  http://blinkpi.local/   (port 80)
+  Clip browser:         http://blinkpi.local:8080/  (after setup)
+  No network?  Join Wi-Fi "BlinkPi-Setup" (password: blinkpi123)
+  Default login: blink / blinkpi  - change it:  passwd
+

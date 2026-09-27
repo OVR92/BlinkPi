@@ -1,0 +1,19 @@
+[Unit]
+Description=BlinkPi setup & maintenance page (fallback Wi-Fi hotspot on first boot)
+After=network.target NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=@PROJECT_DIR@
+Environment=BUB_CONFIG=@PROJECT_DIR@/config.yaml
+Environment=BUB_PROJECT_DIR=@PROJECT_DIR@
+ExecStart=@PROJECT_DIR@/.venv/bin/bub-setup
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>BlinkPi setup</title>
+<style>
+  :root {
+    --bg: #0e0e10; --bg-2: #18181b; --bg-3: #232327;
+    --fg: #f5f5f7; --fg-2: #a1a1aa; --fg-3: #71717a;
+    --accent: #38bdf8; --accent-soft: rgba(56,189,248,.15);
+    --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    --border: #2a2a2e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  header { position: sticky; top: 0; z-index: 10; background: rgba(14,14,16,.9); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 12px 16px; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--bg-3); color: var(--fg-2); font-weight: 500; }
+  .badge.ok { background: rgba(74,222,128,.15); color: var(--ok); }
+  .badge.warn { background: rgba(251,191,36,.15); color: var(--warn); }
+  .badge.bad { background: rgba(248,113,113,.15); color: var(--bad); }
+  nav { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { appearance: none; border: 1px solid transparent; background: transparent; color: var(--fg-2); font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+  nav button.active { background: var(--bg-3); color: var(--fg); border-color: var(--border); }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+  .card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+  .card p.hint { color: var(--fg-3); font-size: 13px; margin: 4px 0 10px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 13px; color: var(--fg-2); margin: 8px 0 4px; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    width: 100%; font: inherit; font-size: 14px; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+  }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; min-height: 90px; }
+  input[type=checkbox] { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
+  .btn { appearance: none; border: 1px solid var(--border); background: var(--bg-3); color: var(--fg); font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #041018; font-weight: 600; }
+  .btn.danger { color: var(--bad); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  pre.log { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 10px 0 0; color: var(--fg-2); }
+  pre.log:empty { display: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--fg-3); font-weight: 500; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--fg-3); }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .steps li { padding: 6px 0; display: flex; gap: 10px; align-items: flex-start; }
+  .steps .n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--bg-3); color: var(--fg-2); font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .steps li.done .n { background: rgba(74,222,128,.2); color: var(--ok); }
+  .steps a { color: var(--accent); cursor: pointer; }
+  .wifi-list { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .wifi-list div { padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; font-size: 14px; }
+  .wifi-list div:hover, .wifi-list div.sel { background: var(--accent-soft); }
+  .wifi-list span { color: var(--fg-3); font-size: 12px; }
+  .msg { font-size: 13px; margin-top: 8px; }
+  .msg.bad { color: var(--bad); } .msg.ok { color: var(--ok); }
+  code { background: var(--bg-3); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  .muted { color: var(--fg-3); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BlinkPi <span id="hostBadge" class="badge">…</span> <span id="modeBadge" class="badge">…</span></h1>
+  <nav>
+    <button data-tab="status" class="active">Status</button>
+    <button data-tab="network">Network</button>
+    <button data-tab="storage">Storage</button>
+    <button data-tab="cloud">Cloud (rclone)</button>
+    <button data-tab="alerts">Alerts &amp; AI</button>
+    <button data-tab="settings">Settings</button>
+    <button data-tab="maint">Maintenance</button>
+  </nav>
+</header>
+<main>
+
+<!-- ───────────── STATUS ───────────── -->
+<section class="tab active" id="tab-status">
+  <div class="card" id="setupCard">
+    <h2>Setup checklist</h2>
+    <ol class="steps" id="steps"></ol>
+  </div>
+  <div class="card">
+    <h2>Network</h2>
+    <div id="netSummary" class="muted">…</div>
+  </div>
+  <div class="card">
+    <h2>USB drive (backing image)</h2>
+    <div id="imageSummary" class="muted">…</div>
+  </div>
+  <div class="card">
+    <h2>Services</h2>
+    <table id="services"></table>
+    <p class="muted" id="lastSync"></p>
+  </div>
+</section>
+
+<!-- ───────────── NETWORK ───────────── -->
+<section class="tab" id="tab-network">
+  <div class="card">
+    <h2>Wi-Fi</h2>
+    <p class="hint">Pick your home network. If you are connected through the setup hotspot, this device will drop off it while the Pi joins your network. Afterwards open <code id="localUrl">http://blinkpi.local/</code> from your own network.</p>
+    <div class="actions" style="margin:0 0 8px">
+      <button class="btn" id="btnScan">Rescan</button>
+      <span class="muted" id="scanNote"></span>
+    </div>
+    <div class="wifi-list" id="wifiList"></div>
+    <div class="row">
+      <div><label>Network name (SSID)</label><input type="text" id="ssid" autocomplete="off"></div>
+      <div><label>Password</label><input type="password" id="wifiPass" autocomplete="off"></div>
+    </div>
+    <div class="row">
+      <div><label>Wi-Fi country (2-letter code, required on first use)</label><input type="text" id="country" maxlength="2" placeholder="US"></div>
+      <div style="align-self:end"><label><input type="checkbox" id="hidden"> Hidden network</label></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="btnConnect">Connect</button>
+      <button class="btn" id="btnForget">Forget saved Wi-Fi</button>
+    </div>
+    <div class="msg" id="wifiMsg"></div>
+    <pre class="log" id="wifiLog"></pre>
+  </div>
+  <div class="card">
+    <h2>Setup hotspot</h2>
+    <p class="hint">When the Pi has no network for a minute it broadcasts this hotspot so you can reach this page. While the hotspot is up it retries your saved Wi-Fi every 5 minutes.</p>
+    <div class="row">
+      <div><label>Hotspot name</label><input type="text" id="hsSsid"></div>
+      <div><label>Hotspot password (8+ chars)</label><input type="text" id="hsPass"></div>
+    </div>
+    <label><input type="checkbox" id="hsEnabled"> Enable fallback hotspot</label>
+    <div class="actions">
+      <button class="btn" id="btnHsDown">Turn hotspot off now</button>
+      <span class="muted">Saved with “Apply” on the Settings tab.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────── STORAGE ───────────── -->
+<section class="tab" id="tab-storage">
+  <div class="card">
+    <h2>Network share (SMB / CIFS)</h2>
+    <p class="hint">A shared folder on a NAS or Windows PC. Clips are copied there as <code>camera/2026-05-03_17-08-41_camera.mp4</code>.</p>
+    <label><input type="checkbox" id="smbEnabled"> Enable SMB destination</label>
+    <div class="row">
+      <div><label>Server (IP or hostname)</label><input type="text" id="smbServer" placeholder="10.0.0.5"></div>
+      <div><label>Share name</label><input type="text" id="smbShare" placeholder="BlinkClips"></div>
+    </div>
+    <div class="row">
+      <div><label>Username</label><input type="text" id="smbUser" autocomplete="off"></div>
+      <div><label>Password <span class="muted" id="smbPassNote"></span></label><input type="password" id="smbPass" autocomplete="new-password"></div>
+    </div>
+    <div class="row">
+      <div><label>SMB version</label><select id="smbVersion"><option>3.0</option><option>3.1.1</option><option>2.1</option><option>default</option></select></div>
+      <div><label>Layout</label><select id="smbLayout"><option value="per_camera">One folder per camera</option><option value="flat">Flat</option></select></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnSmbTest">Test connection</button>
+    </div>
+    <pre class="log" id="smbLog"></pre>
+  </div>
+  <div class="card">
+    <h2>Cloud (rclone)</h2>
+    <label><input type="checkbox" id="rcEnabled"> Enable rclone destination</label>
+    <div class="row">
+      <div><label>Remote to use</label><select id="rcRemote"></select></div>
+      <div><label>Subfolder on the remote (optional)</label><input type="text" id="rcSubfolder" placeholder="BlinkClips"></div>
+    </div>
+    <div class="row">
+      <div><label>Layout</label><select id="rcLayout"><option value="flat">Flat</option><option value="per_camera">One folder per camera</option></select></div>
+      <div><label>Delete cloud clips older than (days, 0 = never)</label><input type="number" id="rcRetention" min="0"></div>
+    </div>
+    <label><input type="checkbox" id="rcTrash"> Move to trash instead of deleting permanently (when supported)</label>
+    <p class="hint">Remotes are created on the <a onclick="showTab('cloud')" style="color:var(--accent);cursor:pointer">Cloud tab</a>.</p>
+  </div>
+  <div class="card">
+    <h2>Clips kept on the Pi</h2>
+    <div class="row">
+      <div><label>Keep the last N days on the Pi (0 = wipe nightly)</label><input type="number" id="wipeRetention" min="0"></div>
+      <div><label>Nightly wipe time (HH:MM, local)</label><input type="text" id="wipeTime" placeholder="03:00"></div>
+    </div>
+    <p class="hint">The 4 GB virtual USB drive fills up otherwise. Clips already copied to your destinations are unaffected.</p>
+  </div>
+  <div class="actions"><button class="btn primary" onclick="applyConfig()">Apply</button></div>
+  <pre class="log" id="applyLog2"></pre>
+</section>
+
+<!-- ───────────── CLOUD ───────────── -->
+<section class="tab" id="tab-cloud">
+  <div class="card">
+    <h2>Configured remotes</h2>
+    <table id="remotes"></table>
+    <pre class="log" id="rcTestLog"></pre>
+  </div>
+  <div class="card">
+    <h2>Add a remote</h2>
+    <div class="row">
+      <div><label>Provider</label><select id="rcType"></select></div>
+      <div><label>Remote name</label><input type="text" id="rcName" placeholder="gdrive"></div>
+    </div>
+    <p class="hint" id="rcHelp"></p>
+    <div id="rcFields"></div>
+    <div id="rcTokenBox" style="display:none">
+      <label>Token from <code id="rcAuthCmd">rclone authorize "drive"</code></label>
+      <p class="hint">Install rclone on a computer with a web browser (<a href="https://rclone.org/downloads/" target="_blank" style="color:var(--accent)">rclone.org/downloads</a>), run the command above in a terminal, sign in when the browser opens, then paste everything it prints here.</p>
+      <textarea id="rcToken" placeholder='{"access_token":"...","token_type":"Bearer",...}'></textarea>
+    </div>
+    <div id="rcRawBox" style="display:none">
+      <label>rclone.conf section</label>
+      <textarea id="rcRaw" placeholder="[myremote]&#10;type = drive&#10;token = {...}"></textarea>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="btnRcSave">Save remote</button>
+    </div>
+    <div class="msg" id="rcMsg"></div>
+  </div>
+</section>
+
+<!-- ───────────── ALERTS & AI ───────────── -->
+<section class="tab" id="tab-alerts">
+  <div class="card">
+    <h2>Email</h2>
+    <p class="hint">Used for watchdog alerts and, optionally, a message for every new clip with its thumbnail and AI summary. Gmail: smtp.gmail.com, port 587, STARTTLS, an app password.</p>
+    <label><input type="checkbox" id="emEnabled"> Enable email</label>
+    <div class="row">
+      <div><label>SMTP server</label><input type="text" id="emHost" placeholder="smtp.gmail.com"></div>
+      <div><label>Port</label><input type="number" id="emPort" placeholder="587"></div>
+    </div>
+    <div class="row">
+      <div><label>Security</label><select id="emSecurity"><option value="starttls">STARTTLS (587)</option><option value="ssl">SSL/TLS (465)</option><option value="none">None (25)</option></select></div>
+      <div><label>Username</label><input type="text" id="emUser" autocomplete="off"></div>
+    </div>
+    <div class="row">
+      <div><label>Password <span class="muted" id="emPassNote"></span></label><input type="password" id="emPass" autocomplete="new-password"></div>
+      <div><label>From address</label><input type="text" id="emFrom" placeholder="blinkpi@example.com"></div>
+    </div>
+    <label>To (comma separated)</label><input type="text" id="emTo" placeholder="you@example.com">
+    <div class="row">
+      <div><label>For every new clip</label>
+        <select id="emOnClip">
+          <option value="off">Don't email</option>
+          <option value="summary">Send a summary with the thumbnail</option>
+          <option value="clip">Attach the clip itself (off-site backup)</option>
+        </select></div>
+      <div><label>Max attachment size (MB)</label><input type="number" id="emMaxMb" min="1" step="1"></div>
+    </div>
+    <p class="hint">Attaching clips turns your mailbox into a simple cloud backup: each clip is a few MB. Mind your provider's limits (Gmail: 25 MB per message, roughly 500 messages per day on personal accounts, 15 GB storage).</p>
+    <div class="actions"><button class="btn" id="btnEmTest">Send test email</button><span class="msg" id="emMsg"></span></div>
+  </div>
+  <div class="card">
+    <h2>Webhook</h2>
+    <p class="hint">POSTs a JSON document to a URL for each event: new clips (camera, filename, path on the SMB share, AI description) and watchdog alerts. Works with Home Assistant webhook triggers, Node-RED, n8n, ntfy, ...</p>
+    <label><input type="checkbox" id="whEnabled"> Enable webhook</label>
+    <label>URL</label><input type="text" id="whUrl" placeholder="http://homeassistant.local:8123/api/webhook/blinkpi">
+    <label style="margin-top:10px"><input type="checkbox" id="whOnClip"> Send every new clip</label>
+    <div class="actions"><button class="btn" id="btnWhTest">Send test</button><span class="msg" id="whMsg"></span></div>
+  </div>
+  <div class="card">
+    <h2>Watchdog</h2>
+    <p class="hint">Checked after every sync pass. Alerts go to email and/or webhook. Each condition alerts once, then again after the reminder interval, and sends a recovery message when it clears.</p>
+    <label><input type="checkbox" id="wdEnabled"> Enable watchdog</label>
+    <div class="row">
+      <div><label>Alert when no clip for (hours)</label><input type="number" id="wdSilence" min="1" step="0.5"></div>
+      <div><label>Remind every (hours)</label><input type="number" id="wdRemind" min="1"></div>
+    </div>
+    <div class="row">
+      <div><label>Quiet hours start (HH:MM, optional)</label><input type="text" id="wdQuietStart" placeholder="23:00"></div>
+      <div><label>Quiet hours end</label><input type="text" id="wdQuietEnd" placeholder="07:00"></div>
+    </div>
+    <label style="margin-top:10px"><input type="checkbox" id="wdSyncFail"> Alert when sync keeps failing or the USB drive goes offline</label>
+    <div class="row"><div><label>Consecutive failed passes before alerting</label><input type="number" id="wdFailures" min="1"></div></div>
+  </div>
+  <div class="card">
+    <h2>AI clip summaries</h2>
+    <p class="hint">Extracts frames from each new clip with ffmpeg and asks a vision model to describe them. The description shows in the clip browser and in notifications. Works with any OpenAI-compatible endpoint: OpenAI, OpenRouter, Groq, Gemini, or a local Ollama / LM Studio (free). Pick a model that accepts images. Home Assistant users can instead point <a href="https://llmvision.org" target="_blank" style="color:var(--accent)">LLM Vision</a> at the clips on the SMB share via the webhook.</p>
+    <label><input type="checkbox" id="aiEnabled"> Enable AI summaries</label>
+    <div class="row">
+      <div><label>Service</label><select id="aiPreset"></select></div>
+      <div><label>Base URL</label><input type="text" id="aiBase" placeholder="https://api.openai.com/v1"></div>
+    </div>
+    <div class="row">
+      <div><label>API key (leave empty for local servers) <span class="muted" id="aiKeyNote"></span></label><input type="password" id="aiKey" autocomplete="new-password" placeholder="sk-..."></div>
+      <div><label>Model <span class="muted" id="aiModelsMsg"></span></label>
+        <div style="display:flex;gap:6px"><input type="text" id="aiModel" list="aiModelList" autocomplete="off" style="flex:1"><datalist id="aiModelList"></datalist><button class="btn" id="btnAiModels" title="Fetch the model list from the provider">Fetch</button></div></div>
+    </div>
+    <div class="row">
+      <div><label>Frames per clip (evenly spaced)</label><input type="number" id="aiFrames" min="1" max="20"></div>
+      <div><label>…or one frame every N seconds (0 = use count)</label><input type="number" id="aiInterval" min="0" step="0.5"></div>
+    </div>
+    <div class="row">
+      <div><label>Max clips analysed per hour (0 = unlimited)</label><input type="number" id="aiMax" min="0"></div>
+      <div><label>Only these cameras (comma separated, empty = all)</label><input type="text" id="aiCams"></div>
+    </div>
+    <label>Prompt (leave empty for the built-in one; {camera} and {when} are filled in)</label>
+    <textarea id="aiPrompt"></textarea>
+    <label style="margin-top:10px"><input type="checkbox" id="aiNotify"> Include the description in new-clip notifications</label>
+    <div class="actions"><button class="btn" id="btnAiTest">Analyse the newest clip</button><span class="muted">Uses the saved settings plus what's entered above.</span></div>
+    <pre class="log" id="aiLog"></pre>
+  </div>
+  <div class="actions"><button class="btn primary" onclick="applyConfig()">Apply</button></div>
+  <pre class="log" id="applyLog3"></pre>
+</section>
+
+<!-- ───────────── SETTINGS ───────────── -->
+<section class="tab" id="tab-settings">
+  <div class="card">
+    <h2>General</h2>
+    <div class="row">
+      <div><label>Hostname (reach the Pi at &lt;hostname&gt;.local)</label><input type="text" id="hostname"></div>
+      <div><label>Timezone</label><select id="timezone"></select></div>
+    </div>
+    <div class="row">
+      <div><label>Check for new clips every (seconds)</label><input type="number" id="pollInterval" min="10"></div>
+      <div><label>Virtual USB drive size (created once, e.g. 4G)</label><input type="text" id="imageSize"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Clip browser</h2>
+    <label><input type="checkbox" id="webEnabled"> Enable the local clip browser</label>
+    <div class="row">
+      <div><label>Port</label><input type="number" id="webPort" min="1" max="65535"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Admin password for this page</h2>
+    <p class="hint" id="pwHint"></p>
+    <div class="row">
+      <div><label>New password (leave empty to remove)</label><input type="password" id="adminPass" autocomplete="new-password"></div>
+      <div><label>&nbsp;</label><button class="btn" id="btnPass">Set password</button></div>
+    </div>
+    <div class="msg" id="pwMsg"></div>
+  </div>
+  <div class="actions"><button class="btn primary" onclick="applyConfig()">Apply</button></div>
+  <pre class="log" id="applyLog"></pre>
+</section>
+
+<!-- ───────────── MAINTENANCE ───────────── -->
+<section class="tab" id="tab-maint">
+  <div class="card">
+    <h2>Actions</h2>
+    <div class="actions">
+      <button class="btn" onclick="action('run-sync')">Sync now</button>
+      <button class="btn" onclick="action('run-wipe')">Run nightly cleanup now</button>
+      <button class="btn" onclick="action('restart-gadget')">Re-plug USB drive</button>
+      <button class="btn" onclick="action('update')">Update BlinkPi (git pull)</button>
+      <button class="btn danger" onclick="if(confirm('Reboot the Pi?'))action('reboot')">Reboot</button>
+    </div>
+    <pre class="log" id="actionLog"></pre>
+  </div>
+  <div class="card">
+    <h2>Logs</h2>
+    <div class="row">
+      <div><label>Source</label>
+        <select id="logUnit">
+          <option value="sync.log">sync.log</option>
+          <option value="blink-sync.service">blink-sync.service</option>
+          <option value="blink-wipe.service">blink-wipe.service</option>
+          <option value="blink-gadget.service">blink-gadget.service</option>
+          <option value="bub-web.service">bub-web.service</option>
+          <option value="bub-prune.timer">bub-prune.timer</option>
+          <option value="blink-setup.service">blink-setup.service</option>
+        </select></div>
+      <div><label>&nbsp;</label><button class="btn" id="btnLogs">Load</button></div>
+    </div>
+    <pre class="log" id="logs" style="max-height:480px"></pre>
+  </div>
+</section>
+
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let CFG = null, STATUS = null, PROVIDERS = [], REMOTES = [], CFG_SECRETS = {};
+
+async function api(path, method = 'GET', body) {
+  const r = await fetch(path, { method, headers: body ? {'Content-Type': 'application/json'} : {}, body: body ? JSON.stringify(body) : undefined });
+  let data; try { data = await r.json(); } catch { data = {}; }
+  if (!r.ok) throw new Error(data.message || (data.problems && data.problems.join('; ')) || data.detail || (r.status + ' ' + r.statusText));
+  return data;
+}
+function showTab(name) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+  try { localStorage.setItem('bub-tab', name); } catch {}
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function fmtBytes(n) { if (!n) return '0 B'; const u = ['B','KB','MB','GB','TB']; let i = 0; while (n >= 1024 && i < u.length-1) { n /= 1024; i++; } return n.toFixed(i ? 1 : 0) + ' ' + u[i]; }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function pollJob(id, pre, onDone) {
+  pre.textContent = '…';
+  const tick = async () => {
+    let j;
+    try { j = await api('/api/jobs/' + id); }
+    catch (e) { pre.textContent += '\n(lost contact with the Pi: ' + e.message + ' - if you were on the setup hotspot this is expected)'; return; }
+    pre.textContent = j.log.join('\n');
+    pre.scrollTop = pre.scrollHeight;
+    if (j.status === 'running') setTimeout(tick, 1500);
+    else { pre.textContent += '\n[' + j.status + ']'; if (onDone) onDone(j); refreshStatus(); }
+  };
+  tick();
+}
+
+// ───────── status ─────────
+async function refreshStatus() {
+  try { STATUS = await api('/api/status'); } catch (e) { $('modeBadge').textContent = 'offline'; return; }
+  const s = STATUS, n = s.network;
+  $('hostBadge').textContent = s.hostname;
+  $('localUrl').textContent = 'http://' + s.hostname + '.local/';
+  const mode = $('modeBadge');
+  if (n.hotspot) { mode.textContent = 'setup hotspot'; mode.className = 'badge warn'; }
+  else if (n.connectivity === 'full') { mode.textContent = 'online'; mode.className = 'badge ok'; }
+  else if (n.ips.length) { mode.textContent = 'LAN only'; mode.className = 'badge warn'; }
+  else { mode.textContent = 'no network'; mode.className = 'badge bad'; }
+
+  const ips = n.ips.map(a => a.device + ' ' + a.address).join(', ') || 'none';
+  $('netSummary').innerHTML =
+    `<div>Connectivity: <b>${esc(n.connectivity)}</b>${n.ssid ? ' via Wi-Fi <b>' + esc(n.ssid) + '</b>' : ''}</div>` +
+    `<div>Addresses: ${esc(ips)}</div>` +
+    (n.saved ? `<div>Saved Wi-Fi: ${esc(n.saved.ssid)}</div>` : '<div>No Wi-Fi saved yet.</div>') +
+    (n.hotspot ? `<div class="msg warn">Setup hotspot <b>${esc(n.hotspot_ssid)}</b> is active at ${n.hotspot_ip}.</div>` : '') +
+    (n.last_error ? `<div class="msg bad">Last Wi-Fi error: ${esc(n.last_error)}</div>` : '');
+
+  const im = s.image;
+  $('imageSummary').innerHTML = !im.exists
+    ? 'Not created yet - press Apply on the Storage or Settings tab.'
+    : `<div>${im.formatted ? '<span class="dot ok"></span>Formatted by the Sync Module' : '<span class="dot warn"></span>Waiting for the Sync Module to format it (Blink app → Sync Module → Local Storage → Format)'}</div>` +
+      `<div>Size ${fmtBytes(im.size_bytes)}, in use ${fmtBytes(im.allocated_bytes)}${s.disk.free !== undefined ? ', SD card free ' + fmtBytes(s.disk.free) : ''}</div>`;
+
+  let rows = '';
+  for (const [u, st] of Object.entries(s.services)) {
+    const cls = st.active === 'active' ? 'ok' : (st.active === 'failed' ? 'bad' : (st.active === 'inactive' && u.endsWith('.service') ? '' : 'warn'));
+    rows += `<tr><td><span class="dot ${cls}"></span>${esc(u)}</td><td>${esc(st.active)}</td><td class="muted">${esc(st.enabled)}</td></tr>`;
+  }
+  $('services').innerHTML = rows;
+  $('lastSync').textContent = s.last_sync ? 'Last sync: ' + s.last_sync : '';
+  $('pwHint').textContent = s.auth.password_set ? 'A password is set.' : 'No password set - anyone on your network can open this page. Setting one is recommended.';
+
+  // checklist
+  const steps = [
+    { t: 'Join your Wi-Fi (or plug in Ethernet)', done: !n.hotspot && n.ips.length > 0, tab: 'network' },
+    { t: 'Choose a storage destination and press Apply', done: s.config_exists && s.installed, tab: 'storage' },
+    { t: 'Plug the Pi into the Sync Module and format the drive from the Blink app', done: im.formatted, tab: null },
+    { t: 'Set an admin password for this page', done: s.auth.password_set, tab: 'settings' },
+  ];
+  const allDone = steps.every(x => x.done);
+  $('setupCard').style.display = allDone ? 'none' : '';
+  $('steps').innerHTML = steps.map((x, i) => `<li class="${x.done ? 'done' : ''}"><span class="n">${x.done ? '✓' : i + 1}</span><span>${x.tab ? `<a onclick="showTab('${x.tab}')">${esc(x.t)}</a>` : esc(x.t)}</span></li>`).join('');
+}
+
+// ───────── config ─────────
+async function loadConfig() {
+  const d = await api('/api/config');
+  CFG = d.config; REMOTES = d.rclone_remotes; CFG_SECRETS = d.secrets_set || {};
+  const c = CFG, smb = c.destinations.smb, rc = c.destinations.rclone;
+  $('hostname').value = STATUS ? STATUS.hostname : '';
+  const tz = $('timezone'); tz.innerHTML = d.timezones.map(z => `<option>${esc(z)}</option>`).join(''); tz.value = c.timezone || 'UTC';
+  $('pollInterval').value = c.poll_interval_seconds; $('imageSize').value = c.backing_image_size || '4G';
+  $('webEnabled').checked = !!c.web.enabled; $('webPort').value = c.web.listen_port || 8080;
+  $('smbEnabled').checked = !!smb.enabled; $('smbServer').value = smb.server || ''; $('smbShare').value = smb.share || '';
+  $('smbUser').value = d.smb_username || ''; $('smbPassNote').textContent = d.smb_password_set ? '(saved - leave blank to keep)' : '';
+  $('smbVersion').value = smb.smb_version || '3.0'; $('smbLayout').value = smb.layout || 'per_camera';
+  $('rcEnabled').checked = !!rc.enabled; $('rcLayout').value = rc.layout || 'flat'; $('rcRetention').value = rc.retention_days ?? 7; $('rcTrash').checked = !!rc.use_trash;
+  const rem = String(rc.remote || ''); const idx = rem.indexOf(':');
+  const remName = idx >= 0 ? rem.slice(0, idx) : rem, sub = idx >= 0 ? rem.slice(idx + 1) : '';
+  fillRemoteSelect(remName); $('rcSubfolder').value = sub;
+  $('wipeRetention').value = c.wipe.retention_days ?? 3; $('wipeTime').value = c.nightly_wipe_time || '03:00';
+  $('hsSsid').value = c.setup.hotspot_ssid || 'BlinkPi-Setup'; $('hsPass').value = c.setup.hotspot_password || ''; $('hsEnabled').checked = c.setup.hotspot_enabled !== false;
+
+  const n = c.notify || {}, em = n.email || {}, wh = n.webhook || {}, wd = c.watchdog || {}, ai = c.ai || {};
+  $('emEnabled').checked = !!em.enabled; $('emHost').value = em.host || ''; $('emPort').value = em.port || 587;
+  $('emSecurity').value = em.security || 'starttls'; $('emUser').value = em.username || ''; $('emFrom').value = em.from || '';
+  $('emTo').value = Array.isArray(em.to) ? em.to.join(', ') : (em.to || '');
+  $('emOnClip').value = em.on_new_clip === true ? 'summary' : (em.on_new_clip || 'off'); $('emMaxMb').value = em.max_attachment_mb ?? 20;
+  $('emPassNote').textContent = d.secrets_set && d.secrets_set.smtp_password ? '(saved - leave blank to keep)' : '';
+  $('whEnabled').checked = !!wh.enabled; $('whUrl').value = wh.url || ''; $('whOnClip').checked = wh.on_new_clip !== false;
+  $('wdEnabled').checked = !!wd.enabled; $('wdSilence').value = wd.max_silence_hours ?? 24; $('wdRemind').value = wd.remind_every_hours ?? 24;
+  $('wdQuietStart').value = wd.quiet_start || ''; $('wdQuietEnd').value = wd.quiet_end || '';
+  $('wdSyncFail').checked = wd.alert_on_sync_failure !== false; $('wdFailures').value = wd.failures_before_alert ?? 5;
+  $('aiEnabled').checked = !!ai.enabled;
+  AI_PRESETS = d.ai_presets || [];
+  $('aiPreset').innerHTML = AI_PRESETS.map(p => `<option value="${esc(p.id)}">${esc(p.label)}</option>`).join('');
+  $('aiBase').value = ai.base_url || '';
+  const preset = AI_PRESETS.find(p => p.base_url && ai.base_url && p.base_url.replace(/\/$/, '') === ai.base_url.replace(/\/$/, ''));
+  $('aiPreset').value = preset ? preset.id : (ai.base_url ? 'custom' : 'openai');
+  if (!ai.base_url) { const p0 = AI_PRESETS.find(x => x.id === 'openai'); if (p0) $('aiBase').value = p0.base_url; }
+  $('aiModel').value = ai.model || '';
+  $('aiFrames').value = ai.frames ?? 4; $('aiInterval').value = ai.frame_interval_seconds ?? 0; $('aiMax').value = ai.max_per_hour ?? 20;
+  $('aiCams').value = Array.isArray(ai.cameras) ? ai.cameras.join(', ') : (ai.cameras || '');
+  $('aiPrompt').value = ai.prompt || ''; $('aiPrompt').placeholder = d.default_prompt || ''; $('aiNotify').checked = ai.in_notifications !== false;
+  $('aiKeyNote').textContent = CFG_SECRETS.ai_api_key ? '(saved - leave blank to keep)' : '';
+}
+let AI_PRESETS = [];
+$('aiPreset').onchange = () => {
+  const p = AI_PRESETS.find(x => x.id === $('aiPreset').value);
+  if (p && p.base_url) $('aiBase').value = p.base_url;
+  $('aiModel').value = ''; $('aiModelList').innerHTML = ''; $('aiModelsMsg').textContent = '';
+};
+$('btnAiModels').onclick = async () => {
+  $('aiModelsMsg').textContent = 'fetching…';
+  try {
+    const r = await api('/api/ai/models', 'POST', { base_url: $('aiBase').value.trim(), api_key: $('aiKey').value });
+    $('aiModelList').innerHTML = r.models.map(m => `<option value="${esc(m)}"></option>`).join('');
+    $('aiModelsMsg').textContent = r.models.length ? `(${r.models.length} models - start typing)` : r.message;
+    if (r.models.length && !$('aiModel').value) $('aiModel').value = r.models[0];
+  } catch (e) { $('aiModelsMsg').textContent = e.message; }
+};
+function fillRemoteSelect(selected) {
+  const sel = $('rcRemote');
+  sel.innerHTML = '<option value="">— none configured —</option>' + REMOTES.map(r => `<option value="${esc(r.name)}">${esc(r.name)} (${esc(r.label)})</option>`).join('');
+  if (selected) { if (!REMOTES.some(r => r.name === selected)) sel.innerHTML += `<option value="${esc(selected)}">${esc(selected)}</option>`; sel.value = selected; }
+}
+function collectConfig() {
+  const remName = $('rcRemote').value, sub = $('rcSubfolder').value.trim().replace(/^\/+/, '');
+  return {
+    timezone: $('timezone').value,
+    poll_interval_seconds: parseInt($('pollInterval').value, 10) || 30,
+    backing_image_size: $('imageSize').value.trim() || '4G',
+    nightly_wipe_time: $('wipeTime').value.trim() || '03:00',
+    destinations: {
+      smb: { enabled: $('smbEnabled').checked, server: $('smbServer').value.trim(), share: $('smbShare').value.trim(), smb_version: $('smbVersion').value, layout: $('smbLayout').value },
+      rclone: { enabled: $('rcEnabled').checked, remote: remName ? remName + ':' + sub : '', layout: $('rcLayout').value, retention_days: parseInt($('rcRetention').value, 10) || 0, use_trash: $('rcTrash').checked },
+    },
+    wipe: { retention_days: parseInt($('wipeRetention').value, 10) || 0 },
+    web: { enabled: $('webEnabled').checked, listen_port: parseInt($('webPort').value, 10) || 8080 },
+    setup: { hotspot_ssid: $('hsSsid').value.trim() || 'BlinkPi-Setup', hotspot_password: $('hsPass').value, hotspot_enabled: $('hsEnabled').checked },
+    notify: {
+      email: { enabled: $('emEnabled').checked, host: $('emHost').value.trim(), port: parseInt($('emPort').value, 10) || 587, security: $('emSecurity').value,
+               username: $('emUser').value.trim(), from: $('emFrom').value.trim(), to: $('emTo').value.split(',').map(x => x.trim()).filter(Boolean), on_new_clip: $('emOnClip').value, max_attachment_mb: parseFloat($('emMaxMb').value) || 20 },
+      webhook: { enabled: $('whEnabled').checked, url: $('whUrl').value.trim(), on_new_clip: $('whOnClip').checked },
+    },
+    watchdog: { enabled: $('wdEnabled').checked, max_silence_hours: parseFloat($('wdSilence').value) || 24, remind_every_hours: parseFloat($('wdRemind').value) || 24,
+                quiet_start: $('wdQuietStart').value.trim(), quiet_end: $('wdQuietEnd').value.trim(), alert_on_sync_failure: $('wdSyncFail').checked,
+                failures_before_alert: parseInt($('wdFailures').value, 10) || 5 },
+    ai: { enabled: $('aiEnabled').checked, base_url: $('aiBase').value.trim(), model: $('aiModel').value.trim(), frames: parseInt($('aiFrames').value, 10) || 4,
+          frame_interval_seconds: parseFloat($('aiInterval').value) || 0, max_per_hour: parseInt($('aiMax').value, 10) || 0,
+          cameras: $('aiCams').value.split(',').map(x => x.trim()).filter(Boolean), prompt: $('aiPrompt').value, in_notifications: $('aiNotify').checked },
+  };
+}
+function pendingSecrets() {
+  const s = {};
+  if ($('emPass').value) s.smtp_password = $('emPass').value;
+  if ($('aiKey').value) s.ai_api_key = $('aiKey').value;
+  return s;
+}
+async function applyConfig() {
+  const cfg = collectConfig();
+  if (cfg.destinations.rclone.enabled && !cfg.destinations.rclone.remote) { alert('rclone is enabled but no remote is selected. Create one on the Cloud tab first.'); return; }
+  if (!cfg.destinations.smb.enabled && !cfg.destinations.rclone.enabled) { if (!confirm('No destination is enabled - clips will only be viewable in the local clip browser. Continue?')) return; }
+  if (cfg.ai.enabled && (!cfg.ai.model || !cfg.ai.base_url)) { alert('AI summaries are enabled but the base URL or model is empty.'); return; }
+  const body = { config: cfg, hostname: $('hostname').value.trim(), smb_username: $('smbUser').value.trim(), smb_password: $('smbPass').value };
+  const pres = [$('applyLog'), $('applyLog2'), $('applyLog3')];
+  try {
+    const sec = pendingSecrets();
+    if (Object.keys(sec).length) { const r = await api('/api/secrets', 'POST', sec); CFG_SECRETS = r.secrets_set; $('emPass').value = ''; $('aiKey').value = ''; }
+    const r = await api('/api/config', 'POST', body);
+    pres.forEach(p => p.textContent = 'applying…');
+    pollJob(r.job, pres[0], () => { $('smbPass').value = ''; loadConfig(); });
+    pollJob(r.job, pres[1]); pollJob(r.job, pres[2]);
+  } catch (e) { alert('Not applied: ' + e.message); }
+}
+
+// ───────── wifi ─────────
+async function scan(rescan) {
+  $('scanNote').textContent = 'scanning…';
+  try {
+    const d = await api('/api/wifi/scan?rescan=' + (rescan ? 1 : 0));
+    $('wifiList').innerHTML = d.networks.map(n => `<div data-ssid="${esc(n.ssid)}"><b>${esc(n.ssid)}</b><span>${n.signal}% ${n.secure ? '🔒' : ''}${n.in_use ? ' · connected' : ''}</span></div>`).join('') || '<div><span>No networks found. Type the name below.</span></div>';
+    $('wifiList').querySelectorAll('div[data-ssid]').forEach(el => el.onclick = () => { $('ssid').value = el.dataset.ssid; $('wifiList').querySelectorAll('div').forEach(x => x.classList.remove('sel')); el.classList.add('sel'); $('wifiPass').focus(); });
+    $('scanNote').textContent = d.hotspot ? 'Hotspot is active: showing the last scan before it started.' : '';
+  } catch (e) { $('scanNote').textContent = 'scan failed: ' + e.message; }
+}
+$('btnScan').onclick = () => scan(true);
+$('btnConnect').onclick = async () => {
+  const body = { ssid: $('ssid').value.trim(), password: $('wifiPass').value, country: $('country').value.trim(), hidden: $('hidden').checked };
+  if (!body.ssid) { $('wifiMsg').textContent = 'Enter a network name.'; $('wifiMsg').className = 'msg bad'; return; }
+  try {
+    const r = await api('/api/wifi/connect', 'POST', body);
+    $('wifiMsg').textContent = ''; pollJob(r.job, $('wifiLog'));
+  } catch (e) { $('wifiMsg').textContent = e.message; $('wifiMsg').className = 'msg bad'; }
+};
+$('btnForget').onclick = async () => { if (!confirm('Forget the saved Wi-Fi network?')) return; await api('/api/wifi/forget', 'POST', {}); refreshStatus(); };
+$('btnHsDown').onclick = async () => { await api('/api/hotspot', 'POST', { up: false }); refreshStatus(); };
+
+// ───────── smb test ─────────
+$('btnSmbTest').onclick = async () => {
+  try {
+    const r = await api('/api/smb/test', 'POST', { server: $('smbServer').value.trim(), share: $('smbShare').value.trim(), smb_version: $('smbVersion').value, username: $('smbUser').value.trim(), password: $('smbPass').value });
+    pollJob(r.job, $('smbLog'));
+  } catch (e) { $('smbLog').textContent = e.message; }
+};
+
+// ───────── rclone ─────────
+async function loadProviders() {
+  const d = await api('/api/rclone/providers');
+  PROVIDERS = d.providers;
+  $('rcType').innerHTML = PROVIDERS.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join('');
+  renderProviderFields();
+  if (!d.available) $('rcMsg').textContent = 'rclone is not installed on the Pi (sudo apt install rclone).';
+}
+function renderProviderFields() {
+  const p = PROVIDERS.find(x => x.id === $('rcType').value); if (!p) return;
+  $('rcHelp').textContent = p.help || '';
+  $('rcFields').innerHTML = p.fields.map(f => `<label>${esc(f.label)}</label><input type="${f.password ? 'password' : 'text'}" data-key="${f.key}" value="${esc(f.default || '')}" autocomplete="off">`).join('');
+  $('rcTokenBox').style.display = p.oauth ? '' : 'none';
+  $('rcAuthCmd').textContent = `rclone authorize "${p.id}"`;
+  $('rcRawBox').style.display = p.id === 'raw' ? '' : 'none';
+  $('rcName').parentElement.style.display = p.id === 'raw' ? 'none' : '';
+}
+$('rcType').onchange = renderProviderFields;
+$('btnRcSave').onclick = async () => {
+  const type = $('rcType').value, options = {};
+  $('rcFields').querySelectorAll('input').forEach(i => options[i.dataset.key] = i.value);
+  if (type === 'raw') options.raw = $('rcRaw').value;
+  try {
+    const r = await api('/api/rclone/remote', 'POST', { name: $('rcName').value.trim(), type, options, token: $('rcToken').value });
+    $('rcMsg').textContent = `Saved remote "${r.name}". Testing…`; $('rcMsg').className = 'msg ok';
+    await loadRemotes(); fillRemoteSelect(r.name); testRemote(r.name);
+  } catch (e) { $('rcMsg').textContent = e.message; $('rcMsg').className = 'msg bad'; }
+};
+async function loadRemotes() {
+  const d = await api('/api/rclone/remotes'); REMOTES = d.remotes;
+  $('remotes').innerHTML = (REMOTES.length ? REMOTES.map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.label)}</td><td style="text-align:right"><button class="btn" onclick="testRemote('${esc(r.name)}')">Test</button> <button class="btn danger" onclick="deleteRemote('${esc(r.name)}')">Delete</button></td></tr>`).join('') : '<tr><td class="muted">No remotes yet.</td></tr>') + `<tr><td colspan="3" class="muted">${esc(d.config_file)}</td></tr>`;
+  fillRemoteSelect($('rcRemote').value);
+}
+async function testRemote(name) { const r = await api('/api/rclone/test', 'POST', { remote: name + ':' }); pollJob(r.job, $('rcTestLog')); }
+async function deleteRemote(name) { if (!confirm(`Delete remote "${name}"?`)) return; await api('/api/rclone/remote/' + encodeURIComponent(name), 'DELETE'); loadRemotes(); }
+
+// ───────── alerts & AI ─────────
+async function notifyTest(channel, msgEl) {
+  msgEl.textContent = 'sending…'; msgEl.className = 'msg';
+  const body = channel === 'email'
+    ? { channel, email: { host: $('emHost').value.trim(), port: parseInt($('emPort').value, 10) || 0, security: $('emSecurity').value, username: $('emUser').value.trim(), password: $('emPass').value, from: $('emFrom').value.trim(), to: $('emTo').value } }
+    : { channel, webhook: { url: $('whUrl').value.trim() } };
+  try { const r = await api('/api/notify/test', 'POST', body); msgEl.textContent = r.message; msgEl.className = 'msg ok'; }
+  catch (e) { msgEl.textContent = e.message; msgEl.className = 'msg bad'; }
+}
+$('btnEmTest').onclick = () => notifyTest('email', $('emMsg'));
+$('btnWhTest').onclick = () => notifyTest('webhook', $('whMsg'));
+$('btnAiTest').onclick = async () => {
+  try {
+    const r = await api('/api/ai/test', 'POST', { api_key: $('aiKey').value, base_url: $('aiBase').value.trim(), model: $('aiModel').value.trim(), frames: parseInt($('aiFrames').value, 10) || 0, frame_interval_seconds: parseFloat($('aiInterval').value) || 0, prompt: $('aiPrompt').value });
+    pollJob(r.job, $('aiLog'));
+  } catch (e) { $('aiLog').textContent = e.message; }
+};
+
+// ───────── settings / maintenance ─────────
+$('btnPass').onclick = async () => {
+  try { const r = await api('/api/password', 'POST', { password: $('adminPass').value }); $('pwMsg').textContent = r.password_set ? 'Password set. Your browser will ask for it on the next page load.' : 'Password removed.'; $('pwMsg').className = 'msg ok'; $('adminPass').value = ''; refreshStatus(); }
+  catch (e) { $('pwMsg').textContent = e.message; $('pwMsg').className = 'msg bad'; }
+};
+async function action(name) {
+  try { const r = await api('/api/actions/' + name, 'POST', {}); if (r.job) pollJob(r.job, $('actionLog')); else $('actionLog').textContent = r.message || 'ok'; }
+  catch (e) { $('actionLog').textContent = e.message; }
+}
+$('btnLogs').onclick = async () => { const r = await fetch('/api/logs?unit=' + encodeURIComponent($('logUnit').value) + '&lines=300'); $('logs').textContent = await r.text(); $('logs').scrollTop = $('logs').scrollHeight; };
+
+// ───────── boot ─────────
+(async () => {
+  try { showTab(localStorage.getItem('bub-tab') || 'status'); } catch {}
+  await refreshStatus();
+  await loadConfig();
+  await loadProviders();
+  await loadRemotes();
+  scan(false);
+  if (STATUS && STATUS.network.hotspot) showTab('network');
+  setInterval(refreshStatus, 15000);
+})();
+</script>
+</body>
+</html>

@@ -13,7 +13,12 @@
 #   8. Adds a sudoers entry so the unprivileged user can mount the image
 #   9. (optional) Installs avahi-daemon for .local mDNS discovery
 #  10. (optional) Installs the web UI service if web.enabled = true
-#  11. Enables and starts the timers
+#  11. Installs the setup & maintenance page service (bub-setup, port 80)
+#  12. Enables and starts the timers
+#
+# Environment overrides (used by the setup page when it re-runs this script):
+#   BUB_SKIP_VENV=1    keep the existing .venv instead of recreating it
+#   BUB_FROM_SETUP=1   don't restart blink-setup.service (we're running inside it)
 #
 # What this does NOT do:
 #   - Set up rclone (run `rclone config` separately)
@@ -117,15 +122,16 @@ id -u "$PI_USER" >/dev/null 2>&1 || die "pi_user '$PI_USER' from config.yaml doe
 
 # ─────────────────────── Python venv ───────────────────────
 
-log "creating virtualenv at $PROJECT_DIR/.venv"
-sudo -u "$PI_USER" python3 -m venv "$PROJECT_DIR/.venv"
-sudo -u "$PI_USER" "$PROJECT_DIR/.venv/bin/pip" install --upgrade pip wheel
-
-if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
+if [[ "${BUB_SKIP_VENV:-0}" == "1" && -x "$PROJECT_DIR/.venv/bin/bub-sync" ]]; then
+    log "BUB_SKIP_VENV=1: keeping existing virtualenv"
+else
+    log "creating virtualenv at $PROJECT_DIR/.venv"
+    sudo -u "$PI_USER" python3 -m venv "$PROJECT_DIR/.venv"
+    sudo -u "$PI_USER" "$PROJECT_DIR/.venv/bin/pip" install --upgrade pip wheel
+    # [web] extras (FastAPI/uvicorn) are always installed: the setup page
+    # (bub-setup) needs them even when the clip browser is disabled.
     log "installing project with web extras"
     sudo -u "$PI_USER" "$PROJECT_DIR/.venv/bin/pip" install -e "$PROJECT_DIR[web]"
-else
-    sudo -u "$PI_USER" "$PROJECT_DIR/.venv/bin/pip" install -e "$PROJECT_DIR"
 fi
 
 # ─────────────────────── boot config ───────────────────────
@@ -211,10 +217,25 @@ fi
 
 # ─────────────────────── SMB fstab entry ───────────────────────
 
+# Our entry is identified by its mount point (2nd fstab field), so changing
+# the server/share on the setup page replaces it instead of adding a second.
+SMB_MOUNT=$(read_yaml_value "destinations.smb.mount_point")
+SMB_MOUNT=${SMB_MOUNT:-/mnt/blink-share}
+
+remove_smb_fstab_entry() {
+    if grep -qE "[[:space:]]${SMB_MOUNT}[[:space:]]" /etc/fstab; then
+        log "removing existing fstab entry for $SMB_MOUNT"
+        cp /etc/fstab "/etc/fstab.bak.$(date +%s)"
+        sed -i "\|[[:space:]]${SMB_MOUNT}[[:space:]]|d" /etc/fstab
+        systemctl stop "$(systemd-escape -p --suffix=automount "$SMB_MOUNT")" 2>/dev/null || true
+        systemctl stop "$(systemd-escape -p --suffix=mount "$SMB_MOUNT")" 2>/dev/null || true
+        systemctl daemon-reload
+    fi
+}
+
 if [[ "$SMB_ENABLED" == "True" || "$SMB_ENABLED" == "true" ]]; then
     SMB_SERVER=$(read_yaml_value "destinations.smb.server")
     SMB_SHARE=$(read_yaml_value "destinations.smb.share")
-    SMB_MOUNT=$(read_yaml_value "destinations.smb.mount_point")
     SMB_CREDS=$(read_yaml_value "destinations.smb.credentials_file")
     SMB_VERSION=$(read_yaml_value "destinations.smb.smb_version")
 
@@ -230,14 +251,31 @@ if [[ "$SMB_ENABLED" == "True" || "$SMB_ENABLED" == "true" ]]; then
     UID_NUM=$(id -u "$PI_USER")
     GID_NUM=$(id -g "$PI_USER")
     FSTAB_ENTRY="//${SMB_SERVER}/${SMB_SHARE}  ${SMB_MOUNT}  cifs  noauto,x-systemd.automount,x-systemd.idle-timeout=300,credentials=${SMB_CREDS},vers=${SMB_VERSION},uid=${UID_NUM},gid=${GID_NUM},file_mode=0644,dir_mode=0755  0  0"
-    if grep -qF "//${SMB_SERVER}/${SMB_SHARE}" /etc/fstab; then
-        log "fstab already has an entry for //${SMB_SERVER}/${SMB_SHARE}; leaving alone"
+    if grep -qF "$FSTAB_ENTRY" /etc/fstab; then
+        log "fstab already has the SMB automount; leaving alone"
     else
+        remove_smb_fstab_entry
         log "adding SMB automount to /etc/fstab"
         cp /etc/fstab "/etc/fstab.bak.$(date +%s)"
         echo "$FSTAB_ENTRY" >> /etc/fstab
         systemctl daemon-reload
+        systemctl restart remote-fs.target 2>/dev/null || true
     fi
+else
+    remove_smb_fstab_entry
+fi
+
+# ─────────────────────── setup page prerequisites ───────────────────────
+
+# Captive-portal DNS for the fallback hotspot (only used by NetworkManager
+# when a "shared" connection is active, i.e. never during normal operation).
+if [[ -d /etc/NetworkManager ]]; then
+    mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+    cat > /etc/NetworkManager/dnsmasq-shared.d/blinkpi-captive.conf <<'EOF'
+# BlinkPi setup hotspot: resolve every name to the hotspot address so joined
+# devices open the setup page as a captive portal.
+address=/#/10.42.0.1
+EOF
 fi
 
 # ─────────────────────── systemd units ───────────────────────
@@ -271,6 +309,7 @@ fi
 if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
     generate bub-web.service
 fi
+generate blink-setup.service
 
 systemctl daemon-reload
 
@@ -284,6 +323,12 @@ fi
 if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
     systemctl enable --now bub-web.service
 fi
+if [[ "${BUB_FROM_SETUP:-0}" == "1" ]]; then
+    # Called from the running setup page: don't restart ourselves mid-request.
+    systemctl enable blink-setup.service
+else
+    systemctl enable --now blink-setup.service
+fi
 
 # ─────────────────────── done ───────────────────────
 
@@ -295,6 +340,8 @@ log "  2. Plug the Pi's USB-OTG port into the SM2's USB port"
 log "  3. Open the Blink app, you'll see a prompt to format the new USB drive — accept it"
 log "  4. Trigger a motion event on a camera and watch:"
 log "       journalctl -u blink-sync.service -f"
+log ""
+log "Setup & maintenance page: http://$(hostname).local/  (set an admin password there)"
 log ""
 if [[ "$WEB_ENABLED" == "True" || "$WEB_ENABLED" == "true" ]]; then
     HOSTNAME_LOCAL=$(hostname).local
